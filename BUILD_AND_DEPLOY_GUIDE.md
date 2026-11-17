@@ -60,7 +60,7 @@ npm.cmd run dev
 
 ### الطريقة الثانية: بناء ملف APK محلياً على Windows
 إذا أردت البناء مباشرة من جهازك:
-1. ثبّت **Java JDK 21** (مثل Eclipse Temurin) و **Android Studio** (مع Android SDK).
+1. ثبّت **Java JDK 17** (مثل Eclipse Temurin 17) و **Android Studio** (مع Android SDK).
 2. انقر مرتين على ملف **`build-apk.bat`** داخل مجلد `wateen_sport` (أو شغّله من موجه الأوامر):
    ```bat
    build-apk.bat
