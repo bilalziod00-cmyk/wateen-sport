@@ -97,9 +97,23 @@ export interface MatchItem {
   stadium: string;
   referee?: string;
   broadcast?: string;
+  liveStreamUrl?: string;
   featured?: boolean;
   events: MatchEvent[];
   stats?: MatchStats;
+}
+
+export type StreamPlatform = 'youtube' | 'facebook' | 'other';
+
+export interface LiveStreamItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
+  platform: StreamPlatform;
+  competitionId: CompetitionId;
+  isLive: boolean;
+  createdAt: string;
 }
 
 export type StandingZone = 'champion' | 'continental' | 'promotion' | 'relegation' | 'none';
@@ -184,8 +198,10 @@ export interface AppDataState {
   scorers: TopScorer[];
   banners: HeroBanner[];
   cards: SportsGraphicCard[];
+  liveStreams: LiveStreamItem[];
   notifications: AppNotification[];
   adminPin: string;
+  geminiApiKey?: string;
   updatedAt: string;
 }
 

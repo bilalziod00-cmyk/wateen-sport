@@ -16,6 +16,7 @@ import { CompetitionId, MatchItem, NewsArticle, NewsCategoryTag } from '../types
 import { formatRelativeAmman } from '../utils/ammanTime';
 import { MatchCard } from '../components/MatchCard';
 import { SportsCardItem } from '../components/SportsCardItem';
+import { LiveStreamPlayer } from '../components/LiveStreamPlayer';
 
 interface HomePageProps {
   onSelectArticle: (article: NewsArticle) => void;
@@ -57,6 +58,11 @@ export const HomePage: React.FC<HomePageProps> = ({
   const breakingArticles = useMemo(
     () => data.articles.filter((a) => a.isBreaking),
     [data.articles]
+  );
+
+  const activeLiveStreams = useMemo(
+    () => (data.liveStreams || []).filter((s) => s.isLive),
+    [data.liveStreams]
   );
 
   const featuredMatches = useMemo(() => {
@@ -147,6 +153,24 @@ export const HomePage: React.FC<HomePageProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* البث المباشر الفوري داخل التطبيق (يوتيوب / فيسبوك) */}
+      {activeLiveStreams.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse-live" />
+              <h2 className="text-base font-black text-white">البث المباشر الآن • وتين سبورت</h2>
+            </div>
+            <span className="text-[11px] font-bold text-rose-300">شاهد داخل التطبيق</span>
+          </div>
+          <div className="space-y-3">
+            {activeLiveStreams.map((stream) => (
+              <LiveStreamPlayer key={stream.id} stream={stream} />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* سلايدر البنرات الرئيسية */}

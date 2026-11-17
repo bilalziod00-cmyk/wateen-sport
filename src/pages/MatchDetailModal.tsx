@@ -14,6 +14,8 @@ import { COMPETITIONS } from '../constants/competitions';
 import { formatAmmanDate, formatAmmanTime } from '../utils/ammanTime';
 import { TeamCrest } from '../components/TeamCrest';
 import { ShareBar } from '../components/ShareSheet';
+import { LiveStreamPlayer } from '../components/LiveStreamPlayer';
+import { parseLiveStreamUrl } from '../utils/streamEmbed';
 
 interface MatchDetailModalProps {
   match: MatchItem;
@@ -146,6 +148,22 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
               )}
             </div>
           </div>
+
+          {/* البث المباشر للمباراة (يوتيوب أو فيسبوك) إن وُجد */}
+          {match.liveStreamUrl && (
+            <LiveStreamPlayer
+              stream={{
+                id: `match-stream-${match.id}`,
+                title: `بث مباشر: ${match.homeTeam} × ${match.awayTeam}`,
+                subtitle: `${comp.name} • ${match.stadium}`,
+                url: match.liveStreamUrl,
+                platform: parseLiveStreamUrl(match.liveStreamUrl).platform,
+                competitionId: match.competitionId,
+                isLive: true,
+                createdAt: match.kickoffIso,
+              }}
+            />
+          )}
 
           {/* أحداث المباراة */}
           <section className="rounded-2xl bg-[#0E1621] border border-white/10 p-4 space-y-3">

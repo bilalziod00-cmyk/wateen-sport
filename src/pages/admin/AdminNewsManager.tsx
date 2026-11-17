@@ -1,10 +1,22 @@
-import React, { useState } from 'react';
-import { Edit3, Flame, ImagePlus, Plus, Trash2, X, BarChart3 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import {
+  BarChart3,
+  Edit3,
+  Flame,
+  ImagePlus,
+  KeyRound,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 import { COMPETITIONS, NEWS_TAG_LABELS } from '../../constants/competitions';
 import { CompetitionId, NewsArticle, NewsCategoryTag, StatPair } from '../../types/sports';
 import { processImageFile } from '../../utils/imageUpload';
 import { formatRelativeAmman } from '../../utils/ammanTime';
+import { generateSportsArticleWithAI } from '../../utils/aiSportsWriter';
 
 const EMPTY_ARTICLE: Omit<NewsArticle, 'id' | 'publishedAt' | 'views'> = {
   title: '',
@@ -18,8 +30,17 @@ const EMPTY_ARTICLE: Omit<NewsArticle, 'id' | 'publishedAt' | 'views'> = {
 };
 
 export const AdminNewsManager: React.FC = () => {
-  const { data, saveArticle, deleteArticle, toggleArticleBreaking, uploadImageAsset, showToast } =
-    useAppData();
+  const {
+    data,
+    saveArticle,
+    deleteArticle,
+    toggleArticleBreaking,
+    uploadImageAsset,
+    saveGeminiApiKey,
+    showToast,
+  } = useAppData();
+
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_ARTICLE);
@@ -31,6 +52,18 @@ export const AdminNewsManager: React.FC = () => {
   ]);
   const [uploading, setUploading] = useState(false);
 
+  // مساعد الصياغة السريعة بالذكاء الاصطناعي
+  const [aiIdea, setAiIdea] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAiKeyBox, setShowAiKeyBox] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState(data.geminiApiKey || '');
+
+  const scrollToForm = () => {
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
   const openNew = () => {
     setEditingId(null);
     setForm(EMPTY_ARTICLE);
@@ -41,6 +74,7 @@ export const AdminNewsManager: React.FC = () => {
       { label: '', value: '' },
     ]);
     setShowForm(true);
+    scrollToForm();
   };
 
   const openEdit = (art: NewsArticle) => {
@@ -68,6 +102,70 @@ export const AdminNewsManager: React.FC = () => {
       ]);
     }
     setShowForm(true);
+    scrollToForm();
+  };
+
+  // توليد الخبر بالذكاء الاصطناعي (تعبئة للنموذج أو نشر فوري بضغطة زر)
+  const handleAiGenerate = async (publishImmediately: boolean) => {
+    if (!aiIdea.trim()) {
+      showToast('اكتب سطراً واحداً عن الخبر أولاً (مثلاً: الحسين فاز 2-1 على الفيصلي)', 'amber');
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const draft = await generateSportsArticleWithAI(aiIdea.trim(), data.geminiApiKey);
+      const imageUrl =
+        draft.tag === 'match_report' || draft.tag === 'tactical_analysis'
+          ? './images/match-action.jpg'
+          : './images/stadium-night.jpg';
+
+      if (publishImmediately) {
+        const newArticle: NewsArticle = {
+          id: `art-${Date.now()}`,
+          title: draft.title,
+          summary: draft.summary,
+          content: draft.content,
+          competitionId: draft.competitionId,
+          tag: draft.tag,
+          isBreaking: draft.isBreaking,
+          imageUrl,
+          author: 'محرر وتين الذكي • وتين سبورت',
+          publishedAt: new Date().toISOString(),
+          views: 1,
+          statsCard: draft.statsCard,
+        };
+        await saveArticle(newArticle);
+        setAiIdea('');
+        showToast(
+          draft.usedEngine === 'gemini'
+            ? '⚡ تم صياغة ونشر الخبر فوراً عبر Gemini AI!'
+            : '⚡ تم صياغة ونشر الخبر فوراً بالذكاء الاصطناعي!',
+          'emerald'
+        );
+      } else {
+        setEditingId(null);
+        setForm({
+          title: draft.title,
+          summary: draft.summary,
+          content: draft.content,
+          competitionId: draft.competitionId,
+          tag: draft.tag,
+          isBreaking: draft.isBreaking,
+          imageUrl,
+          author: 'فريق تحرير وتين سبورت',
+        });
+        if (draft.statsCard) {
+          setIncludeStats(true);
+          setStatsTitle(draft.statsCard.title);
+          setStatsItems(draft.statsCard.items);
+        }
+        setShowForm(true);
+        scrollToForm();
+        showToast('✨ تم تجهيز الخبر كاملاً — راجعه واضغط "نشر الخبر الآن"', 'emerald');
+      }
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,43 +211,152 @@ export const AdminNewsManager: React.FC = () => {
 
     await saveArticle(article);
     setShowForm(false);
+    setEditingId(null);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      {/* ⚡ مساعد التحرير السريع بالذكاء الاصطناعي */}
+      <div className="rounded-3xl bg-gradient-to-br from-emerald-600/20 via-[#121D2E] to-[#0B121B] border border-emerald-400/40 p-4 space-y-3 shadow-glow">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-white">
+                محرر وتين السريع بالذكاء الاصطناعي ⚡
+              </h3>
+              <p className="text-[11px] text-slate-300">
+                اكتب جملة واحدة فقط وسيكتب الذكاء الاصطناعي العنوان والمقال والتصنيف وبطاقة الأرقام فوراً!
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAiKeyBox((v) => !v)}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/35 border border-white/15 text-[10px] font-bold text-amber-300 shrink-0"
+          >
+            <KeyRound className="w-3 h-3" />
+            {data.geminiApiKey ? 'Gemini مفعّل' : 'مفتاح Gemini (اختياري)'}
+          </button>
+        </div>
+
+        {showAiKeyBox && (
+          <div className="rounded-xl bg-black/40 border border-amber-400/25 p-3 space-y-2">
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              يعمل المحرر الذكي تلقائياً بدون مفتاح، وإذا أردت صياغة متقدمة عبر{' '}
+              <strong className="text-amber-300">Google Gemini</strong> الصق مفتاحك المجاني هنا:
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                dir="ltr"
+                value={geminiKeyInput}
+                onChange={(e) => setGeminiKeyInput(e.target.value)}
+                placeholder="AIzaSy..."
+                className="flex-1 rounded-xl bg-[#070B10] border border-white/15 px-3 py-1.5 text-xs text-white text-left"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  saveGeminiApiKey(geminiKeyInput);
+                  setShowAiKeyBox(false);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-400 text-pitch-950 font-black text-xs"
+              >
+                حفظ
+              </button>
+            </div>
+          </div>
+        )}
+
+        <textarea
+          rows={2}
+          value={aiIdea}
+          onChange={(e) => setAiIdea(e.target.value)}
+          placeholder="مثال: الوحدات يفوز على الرمثا 2-0 في ستاد الملك عبدالله بتألق مهند سمرين..."
+          className="w-full rounded-2xl bg-[#070B10]/90 border border-white/15 focus:border-emerald-400 focus:outline-none px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-500"
+        />
+
+        {/* أمثلة سريعة بضغطة زر */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {[
+            'الفيصلي يتعاقد مع مهاجم دولي جديد لمدة موسمين',
+            'الحسين إربد يفوز 3-1 ويواصل صدارة المحترفين',
+            'تألق كبير لنجوم تحت 20 سنة وتصعيد موهبتين للفريق الأول',
+          ].map((ex) => (
+            <button
+              key={ex}
+              type="button"
+              onClick={() => setAiIdea(ex)}
+              className="px-2.5 py-1 rounded-lg bg-white/8 hover:bg-white/15 text-[10px] font-bold text-slate-300 whitespace-nowrap"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={aiLoading}
+            onClick={() => handleAiGenerate(true)}
+            className="py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-pitch-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-glow"
+          >
+            <Zap className="w-4 h-4 fill-current" />
+            {aiLoading ? 'جاري الصياغة...' : 'صياغة ونشر فوري بضغطة واحدة'}
+          </button>
+
+          <button
+            type="button"
+            disabled={aiLoading}
+            onClick={() => handleAiGenerate(false)}
+            className="py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-extrabold text-xs flex items-center justify-center gap-1.5"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            صياغة وفتح للتعديل قبل النشر
+          </button>
+        </div>
+      </div>
+
+      {/* شريط العنوان وزر الإضافة اليدوية */}
+      <div className="flex items-center justify-between gap-2 pt-1">
         <div>
-          <h2 className="text-base font-black text-white">إدارة الأخبار والمقالات</h2>
+          <h2 className="text-base font-black text-white">الأخبار المنشورة ({data.articles.length})</h2>
           <p className="text-[11px] text-slate-400">
-            إضافة وتعديل وحذف الأخبار ووسمها كعاجلة لكل الدرجات والفئات العمرية
+            اضغط على «تعديل» تحت أي خبر لتعديله فوراً أو أضف خبراً يدوياً
           </p>
         </div>
         <button
           type="button"
           onClick={openNew}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-pitch-950 font-black text-xs shadow-glow shrink-0"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-black text-xs shrink-0"
         >
-          <Plus className="w-4 h-4" />
-          إضافة خبر جديد
+          <Plus className="w-4 h-4 text-emerald-400" />
+          خبر يدوي
         </button>
       </div>
 
       {/* نموذج الإضافة / التعديل */}
       {showForm && (
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
-          className="rounded-2xl bg-[#111B29] border border-emerald-500/35 p-4 sm:p-5 space-y-4 shadow-xl"
+          className="rounded-2xl bg-[#111B29] border border-emerald-500/45 p-4 sm:p-5 space-y-4 shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <h3 className="text-sm font-black text-emerald-300">
-              {editingId ? 'تعديل خبر موجود' : 'نشر خبر جديد في وتين سبورت'}
+              {editingId ? '✏️ تعديل الخبر المختار' : 'نشر خبر جديد في وتين سبورت'}
             </h3>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/8 text-xs text-slate-300 hover:text-white"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
+              إغلاق
             </button>
           </div>
 
@@ -358,7 +565,7 @@ export const AdminNewsManager: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-pitch-950 font-black text-xs shadow-glow"
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-pitch-950 font-black text-xs shadow-glow"
             >
               {editingId ? 'حفظ التعديلات فوراً' : 'نشر الخبر الآن'}
             </button>
@@ -366,20 +573,20 @@ export const AdminNewsManager: React.FC = () => {
         </form>
       )}
 
-      {/* قائمة الأخبار الحالية */}
+      {/* قائمة الأخبار مع أزرار عربية واضحة للتعديل والحذف */}
       <div className="space-y-2.5">
         {data.articles.map((art) => (
           <div
             key={art.id}
-            className="rounded-2xl bg-[#0E1621] border border-white/8 p-3.5 flex items-center justify-between gap-3"
+            className="rounded-2xl bg-[#0E1621] border border-white/8 p-3.5 space-y-3"
           >
             <div className="flex items-center gap-3 min-w-0">
               <img
                 src={art.imageUrl || './images/stadium-night.jpg'}
                 alt={art.title}
-                className="w-16 h-14 rounded-xl object-cover shrink-0 border border-white/10"
+                className="w-16 h-14 rounded-xl object-cover shrink-0 border border-white/10 bg-pitch-900"
               />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
                   {art.isBreaking && (
                     <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white font-black">
@@ -391,40 +598,40 @@ export const AdminNewsManager: React.FC = () => {
                   </span>
                   <span className="text-slate-500">• {formatRelativeAmman(art.publishedAt)}</span>
                 </div>
-                <h4 className="text-xs sm:text-sm font-extrabold text-white line-clamp-1 mt-0.5">
+                <h4 className="text-xs sm:text-sm font-extrabold text-white line-clamp-2 mt-0.5">
                   {art.title}
                 </h4>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
               <button
                 type="button"
-                title="تبديل عاجل"
+                onClick={() => openEdit(art)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-300 text-xs font-extrabold"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                تعديل الخبر
+              </button>
+              <button
+                type="button"
                 onClick={() => toggleArticleBreaking(art.id)}
-                className={`p-2 rounded-xl border text-xs ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-extrabold ${
                   art.isBreaking
                     ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:text-rose-300'
+                    : 'bg-white/5 border-white/10 text-slate-300'
                 }`}
               >
-                <Flame className="w-4 h-4" />
+                <Flame className="w-3.5 h-3.5" />
+                {art.isBreaking ? 'إزالة عاجل' : 'جعله عاجلاً'}
               </button>
               <button
                 type="button"
-                title="تعديل"
-                onClick={() => openEdit(art)}
-                className="p-2 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                title="حذف"
                 onClick={() => deleteArticle(art.id)}
-                className="p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-extrabold mr-auto"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
+                حذف
               </button>
             </div>
           </div>

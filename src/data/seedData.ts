@@ -703,6 +703,19 @@ export const INITIAL_SEED_DATA: AppDataState = {
     },
   ],
 
+  liveStreams: [
+    {
+      id: 'stream-demo-1',
+      title: 'استوديو وتين سبورت التحليلي المباشر — قمة دوري المحترفين',
+      subtitle: 'بث مباشر وتحليل فني لحظي — استبدل الرابط من لوحة التحكم بأي رابط يوتيوب أو فيسبوك بثوانٍ',
+      url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
+      platform: 'youtube',
+      competitionId: 'pro_league',
+      isLive: false,
+      createdAt: hoursAgo(1),
+    },
+  ],
+
   notifications: [
     {
       id: 'not-1',

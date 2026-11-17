@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Edit3, Minus, Plus, Radio, Trash2, X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Edit3, Minus, Plus, Radio, Trash2, Tv, X } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 import { COMPETITIONS, JORDAN_STADIUMS, PRIMARY_COMPETITION_LIST } from '../../constants/competitions';
 import { CompetitionId, MatchEvent, MatchItem, MatchStatus } from '../../types/sports';
@@ -22,6 +22,7 @@ const DEFAULT_MATCH_FORM = {
   stadium: JORDAN_STADIUMS[0],
   referee: '',
   broadcast: 'الأردن الرياضية',
+  liveStreamUrl: '',
   featured: true,
 };
 
@@ -35,6 +36,7 @@ export const AdminMatchesManager: React.FC = () => {
     showToast,
   } = useAppData();
 
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(DEFAULT_MATCH_FORM);
@@ -44,11 +46,18 @@ export const AdminMatchesManager: React.FC = () => {
   const [newEvTeam, setNewEvTeam] = useState<'home' | 'away'>('home');
   const [newEvType, setNewEvType] = useState<MatchEvent['type']>('goal');
 
+  const scrollToForm = () => {
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
   const openNew = () => {
     setEditingId(null);
     setForm(DEFAULT_MATCH_FORM);
     setEvents([]);
     setShowForm(true);
+    scrollToForm();
   };
 
   const openEdit = (m: MatchItem) => {
@@ -70,10 +79,12 @@ export const AdminMatchesManager: React.FC = () => {
       stadium: m.stadium,
       referee: m.referee || '',
       broadcast: m.broadcast || '',
+      liveStreamUrl: m.liveStreamUrl || '',
       featured: Boolean(m.featured),
     });
     setEvents(m.events || []);
     setShowForm(true);
+    scrollToForm();
   };
 
   const addEventRow = () => {
@@ -119,6 +130,7 @@ export const AdminMatchesManager: React.FC = () => {
       stadium: form.stadium.trim() || JORDAN_STADIUMS[0],
       referee: form.referee.trim() || undefined,
       broadcast: form.broadcast.trim() || undefined,
+      liveStreamUrl: form.liveStreamUrl.trim() || undefined,
       featured: form.featured,
       events,
       stats: existing?.stats,
@@ -149,6 +161,7 @@ export const AdminMatchesManager: React.FC = () => {
 
       {showForm && (
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
           className="rounded-2xl bg-[#111B29] border border-emerald-500/35 p-4 sm:p-5 space-y-4"
         >
@@ -322,6 +335,21 @@ export const AdminMatchesManager: React.FC = () => {
                 onChange={(e) => setForm({ ...form, broadcast: e.target.value })}
                 placeholder="مثال: الأردن الرياضية"
                 className="w-full rounded-xl bg-[#070B10] border border-white/12 px-3 py-2 text-xs text-white"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-rose-300 mb-1 flex items-center gap-1.5">
+                <Tv className="w-3.5 h-3.5" />
+                رابط بث مباشر للمباراة (يوتيوب أو فيسبوك — اختياري)
+              </label>
+              <input
+                type="url"
+                dir="ltr"
+                value={form.liveStreamUrl}
+                onChange={(e) => setForm({ ...form, liveStreamUrl: e.target.value })}
+                placeholder="https://www.youtube.com/watch?v=... أو رابط بث فيسبوك"
+                className="w-full rounded-xl bg-[#070B10] border border-rose-500/30 focus:border-rose-400 focus:outline-none px-3 py-2 text-xs text-left text-emerald-300"
               />
             </div>
           </div>
@@ -506,16 +534,18 @@ export const AdminMatchesManager: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => openEdit(m)}
-                  className="p-2 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[11px] font-extrabold"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
+                  تعديل
                 </button>
                 <button
                   type="button"
                   onClick={() => deleteMatch(m.id)}
-                  className="p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-extrabold"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
+                  حذف
                 </button>
               </div>
             </div>

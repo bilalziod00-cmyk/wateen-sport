@@ -5,6 +5,7 @@ import {
   CompetitionId,
   FirebaseCloudConfig,
   HeroBanner,
+  LiveStreamItem,
   MatchItem,
   MatchStatus,
   NewsArticle,
@@ -73,11 +74,15 @@ interface AppDataContextValue {
   saveScorer: (scorer: TopScorer) => Promise<void>;
   deleteScorer: (id: string) => Promise<void>;
 
-  // إدارة البنرات والبطاقات الرياضية والصور
+  // إدارة البنرات والبطاقات الرياضية والصور والبث المباشر
   saveBanner: (banner: HeroBanner) => Promise<void>;
   deleteBanner: (id: string) => Promise<void>;
   saveSportsCard: (card: SportsGraphicCard) => Promise<void>;
   deleteSportsCard: (id: string) => Promise<void>;
+  saveLiveStream: (stream: LiveStreamItem) => Promise<void>;
+  deleteLiveStream: (id: string) => Promise<void>;
+  toggleLiveStreamActive: (id: string) => Promise<void>;
+  saveGeminiApiKey: (apiKey: string) => Promise<void>;
   uploadImageAsset: (blob: Blob, fallbackDataUrl: string, folder?: string) => Promise<string>;
 
   // الإشعارات الفورية
@@ -109,6 +114,9 @@ function loadInitialLocalState(): AppDataState {
         return {
           ...INITIAL_SEED_DATA,
           ...parsed,
+          liveStreams: Array.isArray(parsed.liveStreams)
+            ? parsed.liveStreams
+            : INITIAL_SEED_DATA.liveStreams,
           adminPin: parsed.adminPin || INITIAL_SEED_DATA.adminPin,
         };
       }
@@ -509,6 +517,57 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [commitState, showToast]
   );
 
+  // إدارة البث المباشر (يوتيوب وفيسبوك)
+  const saveLiveStream = useCallback(
+    async (stream: LiveStreamItem) => {
+      await commitState((prev) => {
+        const list = prev.liveStreams || [];
+        const exists = list.some((s) => s.id === stream.id);
+        const liveStreams = exists
+          ? list.map((s) => (s.id === stream.id ? stream : s))
+          : [stream, ...list];
+        return { ...prev, liveStreams };
+      });
+      showToast(stream.isLive ? 'تم تشغيل البث المباشر للجميع فوراً' : 'تم حفظ رابط البث بنجاح', 'emerald');
+    },
+    [commitState, showToast]
+  );
+
+  const deleteLiveStream = useCallback(
+    async (id: string) => {
+      await commitState((prev) => ({
+        ...prev,
+        liveStreams: (prev.liveStreams || []).filter((s) => s.id !== id),
+      }));
+      showToast('تم حذف البث المباشر', 'amber');
+    },
+    [commitState, showToast]
+  );
+
+  const toggleLiveStreamActive = useCallback(
+    async (id: string) => {
+      await commitState((prev) => ({
+        ...prev,
+        liveStreams: (prev.liveStreams || []).map((s) =>
+          s.id === id ? { ...s, isLive: !s.isLive } : s
+        ),
+      }));
+      showToast('تم تحديث حالة البث المباشر', 'emerald');
+    },
+    [commitState, showToast]
+  );
+
+  const saveGeminiApiKey = useCallback(
+    async (apiKey: string) => {
+      await commitState((prev) => ({ ...prev, geminiApiKey: apiKey.trim() }));
+      showToast(
+        apiKey.trim() ? 'تم حفظ مفتاح الذكاء الاصطناعي Gemini بنجاح' : 'تم تفعيل المحرر الذكي المدمج',
+        'emerald'
+      );
+    },
+    [commitState, showToast]
+  );
+
   const uploadImageAsset = useCallback(
     async (blob: Blob, fallbackDataUrl: string, folder = 'uploads'): Promise<string> => {
       if (isFirebaseReady()) {
@@ -663,6 +722,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteBanner,
         saveSportsCard,
         deleteSportsCard,
+        saveLiveStream,
+        deleteLiveStream,
+        toggleLiveStreamActive,
+        saveGeminiApiKey,
         uploadImageAsset,
         sendPushNotification,
         deleteNotification,
