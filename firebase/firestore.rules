@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // بيانات تطبيق وتين سبورت (قراءة للجميع، وتحديث من التطبيق)
+    // ملاحظة أمنية: عند التوسع يوصى بتفعيل Firebase Authentication وتقييد الكتابة على بريد المالك فقط
+    match /wateen_app/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // رموز أجهزة أندرويد لاستقبال إشعارات FCM
+    match /fcm_tokens/{tokenId} {
+      allow read: if false;
+      allow create, update: if true;
+    }
+
+    // طابور إرسال الإشعارات الفورية من لوحة التحكم
+    match /push_requests/{reqId} {
+      allow read: if false;
+      allow create: if true;
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.apk
+*.aab
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+android/app/google-services.json
+*.keystore
+*.jks
+
+# Android Gradle local files
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/capacitor-cordova-android-plugins/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

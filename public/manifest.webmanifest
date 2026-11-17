@@ -1,0 +1,20 @@
+{
+  "name": "وتين سبورت | Wateen Sport",
+  "short_name": "وتين سبورت",
+  "description": "نبض الكرة الأردنية - أخبار وبطولات ونتائج وجداول ترتيب الكرة الأردنية",
+  "start_url": "./",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#070B10",
+  "theme_color": "#070B10",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./images/app-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
