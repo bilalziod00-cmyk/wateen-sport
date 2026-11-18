@@ -823,24 +823,36 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         data.matches,
         data.standings,
         data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
-        data.competitionRules?.[targetBatch.competitionId]
+        data.competitionRules?.[targetBatch.competitionId],
+        {
+          season: targetBatch.season,
+          ageCategory: targetBatch.ageCategory,
+          groupName: targetBatch.groupName,
+          roundName: targetBatch.roundName,
+        }
       );
 
-      const hasBlockingIssues = revalidatedRows.some(
-        (r) => r.isUnclear || r.isDuplicate || r.hasConflict
-      );
+      // فصل المباريات/الصفوف الجاهزة الصحيحة عن الصفوف الناقصة التي تحتاج تصحيحاً
+      // لا نمنع اعتماد المباريات الصحيحة بسبب وجود مباراة أخرى ناقصة، ولا نعتمد أبداً مباراة ناقصة كأنها مؤكدة
+      const readyRows = revalidatedRows.filter((r) => r.isReadyForApproval);
+      const incompleteRows = revalidatedRows.filter((r) => !r.isReadyForApproval);
 
-      if (hasBlockingIssues || revalidatedRows.length === 0) {
+      if (readyRows.length === 0) {
         await commitState((prev) => ({
           ...prev,
           importBatches: (prev.importBatches || []).map((b) =>
             b.id === batchId
-              ? { ...b, rows: revalidatedRows, status: 'Needs Correction', updatedAt: new Date().toISOString() }
+              ? {
+                  ...b,
+                  rows: revalidatedRows,
+                  status: 'Needs Correction',
+                  updatedAt: new Date().toISOString(),
+                }
               : b
           ),
         }));
         showToast(
-          'تم رفض الاعتماد التلقائي: توجد قيم "غير واضح" أو تكرار أو تعارض حسابي يجب تصحيحها أولاً',
+          'تم رفض الاعتماد: لا توجد أي مباراة مكتملة جاهزة للاعتماد؛ يرجى تصحيح الحقول غير الواضحة أولاً',
           'crimson'
         );
         return false;
@@ -883,7 +895,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             (s) => s.competitionId === targetBatch.competitionId
           );
 
-          for (const r of revalidatedRows) {
+          for (const r of readyRows) {
             const tName = String(r.teamName || '').trim();
             if (!tName) continue;
             ensureTeamInDirectory(tName);
@@ -938,7 +950,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           targetBatch.dataType === 'match_schedule' ||
           targetBatch.dataType === 'rounds_data'
         ) {
-          for (const r of revalidatedRows) {
+          for (const r of readyRows) {
             const hTeam = String(r.homeTeam || '').trim();
             const aTeam = String(r.awayTeam || '').trim();
             if (!hTeam || !aTeam) continue;
@@ -948,10 +960,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const newMatch: MatchItem = {
               id: `m-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               competitionId: targetBatch.competitionId,
-              season: targetBatch.season,
-              ageCategory: targetBatch.ageCategory,
-              groupName: targetBatch.groupName,
-              round: String(r.round || targetBatch.roundName || 'الجولة 1'),
+              season: r.season || targetBatch.season,
+              ageCategory: r.ageCategory || targetBatch.ageCategory,
+              groupName: r.groupName || targetBatch.groupName,
+              round: String(r.roundNumber || r.round || targetBatch.roundName || 'الجولة 1'),
               homeTeam: hTeam,
               homeShort: hTeam.replace(/^نادي\s+/, '').slice(0, 10),
               homeColor: '#10B981',
@@ -961,12 +973,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               homeScore: Number(r.homeScore) || 0,
               awayScore: Number(r.awayScore) || 0,
               status:
+                r.matchStatus ||
                 r.status ||
                 (targetBatch.dataType === 'match_schedule' ? 'upcoming' : 'finished'),
-              kickoffIso: r.matchDate
-                ? new Date(r.matchDate).toISOString()
-                : new Date().toISOString(),
-              stadium: String(r.stadium || 'ستاد عمّان الدولي'),
+              kickoffIso:
+                r.matchDate && !Number.isNaN(new Date(r.matchDate).getTime())
+                  ? new Date(r.matchDate).toISOString()
+                  : new Date().toISOString(),
+              stadium: String(r.stadium ?? ''),
               isApproved: true,
               importBatchId: targetBatch.id,
               events: [],
@@ -989,7 +1003,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           targetBatch.dataType === 'players_stats' ||
           targetBatch.dataType === 'players_list'
         ) {
-          for (const r of revalidatedRows) {
+          for (const r of readyRows) {
             const pName = String(r.playerName || '').trim();
             const tName = String(r.teamName || '').trim();
             if (!pName) continue;
@@ -1021,7 +1035,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
           }
         } else if (targetBatch.dataType === 'goalkeepers_stats') {
-          for (const r of revalidatedRows) {
+          for (const r of readyRows) {
             const pName = String(r.playerName || '').trim();
             const tName = String(r.teamName || '').trim();
             if (!pName) continue;
@@ -1053,7 +1067,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
           }
         } else if (targetBatch.dataType === 'teams_list') {
-          for (const r of revalidatedRows) {
+          for (const r of readyRows) {
             const tName = String(r.teamName || '').trim();
             if (!tName) continue;
             ensureTeamInDirectory(tName);
@@ -1064,16 +1078,22 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: `rev-${Date.now()}`,
           timestamp: nowIso,
           actor: actorName,
-          action: 'APPROVED_AND_PUBLISHED',
-          details: `تم اعتماد ونشر ${revalidatedRows.length} سجلات ضمن بطولة (${targetBatch.competitionId})`,
+          action: incompleteRows.length > 0 ? 'PARTIAL_APPROVED_PUBLISHED' : 'APPROVED_AND_PUBLISHED',
+          details:
+            incompleteRows.length > 0
+              ? `تم اعتماد ونشر ${readyRows.length} سجلات صحيحة، وإبقاء ${incompleteRows.length} سجلات غير مكتملة في المسودة للتصحيح`
+              : `تم اعتماد ونشر جميع السجلات (${readyRows.length}) ضمن بطولة (${targetBatch.competitionId})`,
         };
 
         const importBatches = (prev.importBatches || []).map((b) =>
           b.id === batchId
             ? {
                 ...b,
-                rows: revalidatedRows,
-                status: 'Published' as const,
+                rows: incompleteRows.length > 0 ? incompleteRows : revalidatedRows,
+                status:
+                  incompleteRows.length > 0
+                    ? ('Needs Correction' as const)
+                    : ('Published' as const),
                 approvedBy: actorName,
                 approvedAt: nowIso,
                 updatedAt: nowIso,
@@ -1094,7 +1114,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       });
 
-      showToast('تم اعتماد البيانات ونشرها وتحديث الترتيب والإحصائيات تلقائياً!', 'emerald');
+      if (incompleteRows.length > 0) {
+        showToast(
+          `تم اعتماد ونشر ${readyRows.length} مباريات صحيحة، وبقيت ${incompleteRows.length} مباراة تحتاج تصحيحاً في المراجعة`,
+          'amber'
+        );
+      } else {
+        showToast(
+          `تم اعتماد ونشر جميع السجلات (${readyRows.length}) وتحديث الترتيب والإحصائيات تلقائياً!`,
+          'emerald'
+        );
+      }
       return true;
     },
     [commitState, data, isAdminUnlocked, showToast]

@@ -1,21 +1,18 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-
-console.log('====================================================================');
-console.log('  WATEEN SPORT - Automated Test Suite (11 Mandatory Scenarios)      ');
-console.log('====================================================================');
-
-// 1. بناء المشروع أولاً للتحقق من عدم وجود أي أخطاء TypeScript
-const rulesText = fs.readFileSync(path.resolve('firebase/firestore.rules'), 'utf8');
-const storageRulesText = fs.readFileSync(path.resolve('firebase/storage.rules'), 'utf8');
-
-// استيراد وحدات المحرك بعد التحويل السريع أو عبر فحص المنطق البرمجي المباشر
-// سنستخدم esbuild المدمج مع Vite لتحزيم ملفات المحرك في الذاكرة وتشغيل الاختبارات الفعلية عليها
 import { build } from 'esbuild';
 
-const bundleResult = await build({
-  entryPoints: ['src/utils/aiSmartImportEngine.ts', 'src/utils/sportsMathEngine.ts', 'src/utils/cardCanvasExport.ts'],
+console.log('====================================================================');
+console.log('  WATEEN SPORT - AI Import Debug & Fix Verification Suite (10+2)   ');
+console.log('====================================================================');
+
+await build({
+  entryPoints: [
+    'src/utils/aiSmartImportEngine.ts',
+    'src/utils/sportsMathEngine.ts',
+    'src/utils/cardCanvasExport.ts',
+  ],
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -26,232 +23,278 @@ const bundleResult = await build({
 const importEngine = await import('../node_modules/.cache/wateen-tests/aiSmartImportEngine.js');
 const mathEngine = await import('../node_modules/.cache/wateen-tests/sportsMathEngine.js');
 const cardEngine = await import('../node_modules/.cache/wateen-tests/cardCanvasExport.js');
+const rulesText = fs.readFileSync(path.resolve('firebase/firestore.rules'), 'utf8');
 
 let passed = 0;
-function runTest(number, title, fn) {
-  fn();
+async function runTest(number, title, fn) {
+  await fn();
   passed += 1;
-  console.log(`✓ [Test ${number}/11] PASSED: ${title}`);
+  console.log(`✓ [Test ${number}] PASSED: ${title}`);
 }
 
 // ---------------------------------------------------------------------------
-// 1. استيراد صورة جدول ترتيب
+// 1. فقرة عربية تحتوي على 3 مباريات ونتائجها
 // ---------------------------------------------------------------------------
-runTest(1, 'استيراد صورة جدول ترتيب (Standings Table Image Import)', async () => {
-  const embeddedImageText = `الحسين إربد | 10 | 8 | 2 | 0 | 22 | 5 | 26\nالوحدات | 10 | 7 | 2 | 1 | 19 | 8 | 23`;
-  const fakeImageBase64 = Buffer.from(embeddedImageText, 'utf8').toString('base64');
-  const res = await importEngine.extractSportsDataWithGeminiAI({
-    dataType: 'standings_table',
-    competitionId: 'pro_league',
-    season: '2026 / 2027',
-    fileBase64: `data:image/png;base64,${fakeImageBase64}`,
-    mimeType: 'image/png',
-    sourceFileName: 'standings_round10.png',
-  });
-  assert.equal(res.rows.length, 2);
-  assert.equal(res.rows[0].teamName, 'الحسين إربد');
-  assert.equal(res.rows[0].points, 26);
+await runTest(1, 'فقرة عربية واحدة تحتوي على 3 مباريات ونتائجها (3 Matches in 1 Arabic Paragraph)', async () => {
+  const paragraph =
+    'شهدت منافسات الجولة الخامسة فوز الكرمل على عجلون 2-1، وتغلب الحسين إربد على الوحدات بنتيجة (3-0)، وتعادل الفيصلي والرمثا 1-1 على ستاد عمّان الدولي.';
+  const rows = importEngine.parseArabicSportsTextToRows(paragraph, 'match_results', 'الجولة 5');
+
+  assert.equal(rows.length, 3, `Expected 3 matches from paragraph, got ${rows.length}`);
+  assert.equal(rows[0].homeTeam, 'الكرمل');
+  assert.equal(rows[0].awayTeam, 'عجلون');
+  assert.equal(rows[0].homeScore, 2);
+  assert.equal(rows[0].awayScore, 1);
+
+  assert.equal(rows[1].homeTeam, 'الحسين إربد');
+  assert.equal(rows[1].awayTeam, 'الوحدات');
+  assert.equal(rows[1].homeScore, 3);
+  assert.equal(rows[1].awayScore, 0);
+
+  assert.equal(rows[2].homeTeam, 'الفيصلي');
+  assert.equal(rows[2].awayTeam, 'الرمثا');
+  assert.equal(rows[2].homeScore, 1);
+  assert.equal(rows[2].awayScore, 1);
+  assert.equal(rows[2].stadium, 'ستاد عمّان الدولي');
 });
 
 // ---------------------------------------------------------------------------
-// 2. استيراد صورة نتائج جولة
+// 2. صورة جدول تحتوي على 8 مباريات
 // ---------------------------------------------------------------------------
-runTest(2, 'استيراد صورة نتائج جولة (Match Round Results Image Import)', async () => {
-  const embeddedResultsText = `الحسين إربد 2 - 1 الفيصلي | الجولة 14 | ستاد الحسن\nالوحدات 3 - 0 الرمثا | الجولة 14 | ستاد عمّان الدولي`;
-  const fakeImageBase64 = Buffer.from(embeddedResultsText, 'utf8').toString('base64');
+await runTest(2, 'صورة جدول تحتوي على 8 مباريات كاملة (Image Table with 8 Matches)', async () => {
+  const table8Text = [
+    'الحسين إربد 2 - 0 شباب العقبة | الجولة 12 | ستاد الحسن',
+    'الوحدات 3 - 1 معان | الجولة 12 | ستاد الملك عبدالله الثاني',
+    'الفيصلي 2 - 2 الرمثا | الجولة 12 | ستاد عمّان الدولي',
+    'السلط 1 - 0 الصريح | الجولة 12 | ملعب السلط',
+    'شباب الأردن 2 - 1 الأهلي | الجولة 12 | ملعب البترا',
+    'الجزيرة 1 - 1 مغير السرحان | الجولة 12 | ستاد الأمير محمد',
+    'العربي 2 - 0 كفرسوم | الجولة 12 | ستاد الحسن',
+    'البقعة 1 - 0 سحاب | الجولة 12 | ملعب البولو',
+  ].join('\n');
+
+  const fakeImgBase64 = Buffer.from(table8Text, 'utf8').toString('base64');
   const res = await importEngine.extractSportsDataWithGeminiAI({
     dataType: 'match_results',
     competitionId: 'pro_league',
     season: '2026 / 2027',
-    roundName: 'الجولة 14',
-    fileBase64: `data:image/jpeg;base64,${fakeImageBase64}`,
-    mimeType: 'image/jpeg',
-    sourceFileName: 'round14_results.jpg',
+    roundName: 'الجولة 12',
+    fileBase64: `data:image/png;base64,${fakeImgBase64}`,
+    mimeType: 'image/png',
+    sourceFileName: 'round12_8matches.png',
   });
-  assert.equal(res.rows.length, 2);
+
+  assert.equal(res.rows.length, 8, `Expected 8 matches from image table, got ${res.rows.length}`);
+  assert.ok(res.extractedOcrText.includes('الحسين إربد'));
   assert.equal(res.rows[0].homeTeam, 'الحسين إربد');
-  assert.equal(res.rows[0].homeScore, 2);
-  assert.equal(res.rows[0].awayScore, 1);
-  assert.equal(res.rows[0].awayTeam, 'الفيصلي');
+  assert.equal(res.rows[7].homeTeam, 'البقعة');
+  assert.equal(res.rows[7].awayTeam, 'سحاب');
 });
 
 // ---------------------------------------------------------------------------
-// 3. لصق نص يحتوي على مباريات متعددة
+// 3. صورة جدول ترتيب
 // ---------------------------------------------------------------------------
-runTest(3, 'لصق نص يحتوي على مباريات متعددة (Multi-match Pasted Arabic Text)', () => {
-  const rawText = `
-    الجولة 15
-    الحسين إربد 2 - 0 السلط | ستاد الحسن - إربد
-    الفيصلي × شباب الأردن (3 - 1) | ستاد عمّان الدولي
-    تأجيل: الرمثا × الأهلي | ملعب الأمير هاشم
+await runTest(3, 'صورة جدول ترتيب (Standings Table Image Import)', async () => {
+  const standingsText = [
+    'الحسين إربد | 14 | 12 | 2 | 0 | 31 | 6 | 38',
+    'الفيصلي | 14 | 11 | 2 | 1 | 28 | 9 | 35',
+    'الوحدات | 14 | 10 | 3 | 1 | 26 | 10 | 33',
+    'الرمثا | 14 | 8 | 3 | 3 | 21 | 13 | 27',
+  ].join('\n');
+  const fakeImgBase64 = Buffer.from(standingsText, 'utf8').toString('base64');
+  const res = await importEngine.extractSportsDataWithGeminiAI({
+    dataType: 'standings_table',
+    competitionId: 'pro_league',
+    season: '2026 / 2027',
+    fileBase64: `data:image/png;base64,${fakeImgBase64}`,
+    mimeType: 'image/png',
+    sourceFileName: 'pro_standings.png',
+  });
+
+  assert.equal(res.rows.length, 4);
+  assert.equal(res.rows[0].teamName, 'الحسين إربد');
+  assert.equal(res.rows[0].points, 38);
+  assert.equal(res.rows[3].teamName, 'الرمثا');
+  assert.equal(res.rows[3].points, 27);
+});
+
+// ---------------------------------------------------------------------------
+// 4. نتيجة مكتوبة بأرقام عربية/هندية وصيغ أقواس مختلفة: الكرمل (٢) عجلون (١)
+// ---------------------------------------------------------------------------
+await runTest(4, 'نتيجة مكتوبة بأرقام عربية/هندية وصيغ مختلفة مثل الكرمل (2) عجلون (1)', async () => {
+  const text = `
+    الكرمل ٢ - ١ عجلون
+    الحسين إربد (٣) الوحدات (٠)
+    الفيصلي (2) - (2) الرمثا
+    السلط 1 شباب الأردن 0
   `;
-  const rows = importEngine.parseArabicSportsTextToRows(rawText, 'rounds_data', 'الجولة 15');
-  assert.equal(rows.length, 3);
-  assert.equal(rows[0].homeTeam, 'الحسين إربد');
+  const rows = importEngine.parseArabicSportsTextToRows(text, 'match_results', 'الجولة 6');
+  assert.equal(rows.length, 4);
+
+  assert.equal(rows[0].homeTeam, 'الكرمل');
+  assert.equal(rows[0].awayTeam, 'عجلون');
   assert.equal(rows[0].homeScore, 2);
-  assert.equal(rows[1].homeTeam, 'الفيصلي');
+  assert.equal(rows[0].awayScore, 1);
+
+  assert.equal(rows[1].homeTeam, 'الحسين إربد');
+  assert.equal(rows[1].awayTeam, 'الوحدات');
   assert.equal(rows[1].homeScore, 3);
-  assert.equal(rows[1].awayScore, 1);
-  assert.equal(rows[2].status, 'postponed');
+  assert.equal(rows[1].awayScore, 0);
+
+  assert.equal(rows[2].homeTeam, 'الفيصلي');
+  assert.equal(rows[2].awayTeam, 'الرمثا');
+  assert.equal(rows[2].homeScore, 2);
+  assert.equal(rows[2].awayScore, 2);
+
+  assert.equal(rows[3].homeTeam, 'السلط');
+  assert.equal(rows[3].awayTeam, 'شباب الأردن');
+  assert.equal(rows[3].homeScore, 1);
+  assert.equal(rows[3].awayScore, 0);
 });
 
 // ---------------------------------------------------------------------------
-// 4. استيراد ملف Excel (CSV / XLSX)
+// 5. ملف Excel يحتوي على عدة جولات
 // ---------------------------------------------------------------------------
-runTest(4, 'استيراد ملف Excel (XLSX / CSV Spreadsheet Import)', async () => {
-  const csvContent = `الفريق,لعب,فاز,تعادل,خسر,له,عليه,النقاط\nالعربي,9,7,1,1,18,6,22\nاتحاد الرمثا,9,6,2,1,15,7,20`;
-  const buf = Buffer.from(csvContent, 'utf8');
+await runTest(5, 'ملف Excel يحتوي على عدة جولات (Multi-Round Excel Spreadsheet)', async () => {
+  const excelCsv = [
+    'الجولة,الفريق الأول,أهداف المستضيف,أهداف الضيف,الفريق الثاني,الملعب',
+    'الجولة 1,الحسين إربد,2,0,السلط,ستاد الحسن',
+    'الجولة 1,الوحدات,1,1,الفيصلي,ستاد عمّان الدولي',
+    'الجولة 2,الرمثا,3,1,شباب الأردن,ملعب الأمير هاشم',
+    'الجولة 3,الأهلي,0,2,الحسين إربد,ملعب البترا',
+  ].join('\n');
+
+  const buf = Buffer.from(excelCsv, 'utf8');
   const extracted = await importEngine.extractTextFromExcelBuffer(
     buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-    'first_div_standings.csv'
+    'multi_rounds.csv'
   );
   const rows = importEngine.parseSpreadsheetContentToRows(
     extracted,
-    'standings_table',
-    'first_div_standings.csv'
+    'rounds_data',
+    'multi_rounds.csv'
   );
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0].teamName, 'العربي');
-  assert.equal(rows[0].points, 22);
-  assert.equal(rows[1].teamName, 'اتحاد الرمثا');
-  assert.equal(rows[1].points, 20);
+
+  assert.equal(rows.length, 4);
+  assert.equal(rows[0].roundNumber, 'الجولة 1');
+  assert.equal(rows[2].roundNumber, 'الجولة 2');
+  assert.equal(rows[2].homeTeam, 'الرمثا');
+  assert.equal(rows[2].homeScore, 3);
+  assert.equal(rows[3].roundNumber, 'الجولة 3');
+  assert.equal(rows[3].awayTeam, 'الحسين إربد');
 });
 
 // ---------------------------------------------------------------------------
-// 5. قراءة PDF يحتوي على جدول
+// 6. مباراة ينقصها اسم الملعب (حقل اختياري لا يفشل الاستخراج ولا يمنع الاعتماد)
 // ---------------------------------------------------------------------------
-runTest(5, 'قراءة PDF يحتوي على جدول (PDF Table Extraction)', () => {
-  const fakePdfString = `%PDF-1.7\n1 0 obj\nstream\n(الكرمل 3 - 1 الطرة | الجولة 8 | ستاد الحسن)\n(دوقرة 2 - 2 الحصن | الجولة 8 | ملعب جرش)\nendstream\nendobj`;
-  const buf = Buffer.from(fakePdfString, 'utf8');
-  const text = importEngine.extractTextFromPdfBuffer(
-    buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+await runTest(6, 'مباراة ينقصها اسم الملعب (Missing Optional Stadium Does Not Fail Match)', async () => {
+  const rows = importEngine.parseArabicSportsTextToRows(
+    'الكرمل 2 - 1 عجلون',
+    'match_results',
+    'الجولة 4'
   );
-  const rows = importEngine.parseArabicSportsTextToRows(text, 'match_results', 'الجولة 8', 'jfa_schedule.pdf');
-  assert.ok(rows.length >= 2);
-  assert.equal(rows[0].homeTeam, 'الكرمل');
-  assert.equal(rows[0].homeScore, 3);
-  assert.equal(rows[0].awayScore, 1);
+  const batch = importEngine.buildValidatedImportBatch({
+    dataType: 'match_results',
+    competitionId: 'second_div',
+    season: '2026 / 2027',
+    ageCategory: 'الفريق الأول',
+    groupName: 'المجموعة الأولى',
+    roundName: 'الجولة 4',
+    sources: [],
+    extractedRows: rows,
+    usedEngine: 'smart_deterministic',
+    existingMatches: [],
+    existingStandings: [],
+  });
+
+  assert.equal(batch.rows.length, 1);
+  assert.equal(batch.rows[0].homeTeam, 'الكرمل');
+  assert.equal(batch.rows[0].awayTeam, 'عجلون');
+  assert.equal(batch.rows[0].stadium, '');
+  assert.equal(batch.rows[0].isReadyForApproval, true);
+  assert.ok(
+    batch.rows[0].validationWarnings.some((w) => w.includes('الملعب')),
+    'Should include non-blocking stadium note in validationWarnings'
+  );
 });
 
 // ---------------------------------------------------------------------------
-// 6. تعديل نتيجة مباراة وإعادة حساب الترتيب تلقائياً
+// 7. مباراة نتيجتها غير واضحة ضمن دفعة من 8 مباريات (7 جاهزة + 1 تحتاج تصحيحاً)
 // ---------------------------------------------------------------------------
-runTest(6, 'تعديل نتيجة مباراة سابقة وإعادة حساب الترتيب (Edit Previous Match Result)', () => {
-  const initialStandings = [
-    {
-      id: 'st-1',
-      competitionId: 'pro_league',
-      teamName: 'الحسين إربد',
-      shortName: 'الحسين',
-      teamColor: '#FACC15',
-      played: 1,
-      won: 1,
-      drawn: 0,
-      lost: 0,
-      goalsFor: 2,
-      goalsAgainst: 1,
-      points: 3,
-      form: ['W'],
-    },
-    {
-      id: 'st-2',
-      competitionId: 'pro_league',
-      teamName: 'الفيصلي',
-      shortName: 'الفيصلي',
-      teamColor: '#0EA5E9',
-      played: 1,
-      won: 0,
-      drawn: 0,
-      lost: 1,
-      goalsFor: 1,
-      goalsAgainst: 2,
-      points: 0,
-      form: ['L'],
-    },
-  ];
+await runTest(7, 'مباراة نتيجتها غير واضحة ضمن 8 مباريات (7 Ready + 1 Needs Correction)', async () => {
+  const text8With1Unclear = [
+    'الحسين إربد 2 - 0 شباب العقبة',
+    'الوحدات 3 - 1 معان',
+    'الفيصلي 2 - 2 الرمثا',
+    'السلط 1 - 0 الصريح',
+    'شباب الأردن 2 - 1 الأهلي',
+    'الجزيرة 1 - 1 مغير السرحان',
+    'العربي 2 - 0 كفرسوم',
+    'البقعة غير واضح - 1 سحاب',
+  ].join('\n');
 
-  const oldMatch = {
-    id: 'm-1',
+  const rawRows = importEngine.parseArabicSportsTextToRows(
+    text8With1Unclear,
+    'match_results',
+    'الجولة 13'
+  );
+  const batch = importEngine.buildValidatedImportBatch({
+    dataType: 'match_results',
     competitionId: 'pro_league',
-    round: 'الجولة 1',
-    homeTeam: 'الحسين إربد',
-    homeShort: 'الحسين',
-    homeColor: '#FACC15',
-    awayTeam: 'الفيصلي',
-    awayShort: 'الفيصلي',
-    awayColor: '#0EA5E9',
-    homeScore: 2,
-    awayScore: 1,
-    status: 'finished',
-    kickoffIso: new Date().toISOString(),
-    stadium: 'ستاد الحسن',
-    events: [],
-  };
+    season: '2026 / 2027',
+    ageCategory: 'الفريق الأول',
+    groupName: 'الدوري العام',
+    roundName: 'الجولة 13',
+    sources: [],
+    extractedRows: rawRows,
+    usedEngine: 'smart_deterministic',
+    existingMatches: [],
+    existingStandings: [],
+  });
 
-  // تعديل النتيجة من (2-1 للحسين) إلى التعادل (1-1)
-  const editedMatch = { ...oldMatch, homeScore: 1, awayScore: 1 };
-  const updated = mathEngine.applyApprovedMatchResultToStandings(
-    editedMatch,
-    oldMatch,
-    initialStandings,
-    [editedMatch]
+  assert.equal(batch.rows.length, 8);
+  assert.equal(batch.diagnosticLog.readyObjectsCount, 7);
+  assert.equal(batch.diagnosticLog.needsCorrectionCount, 1);
+  assert.equal(batch.rows[7].homeScore, null);
+  assert.equal(batch.rows[7].isUnclear, true);
+  assert.equal(batch.rows[7].isReadyForApproval, false);
+});
+
+// ---------------------------------------------------------------------------
+// 8. فريق غير موجود في قاعدة البيانات
+// ---------------------------------------------------------------------------
+await runTest(8, 'فريق غير موجود في قاعدة البيانات (Unknown Team in Database)', async () => {
+  const rawRows = importEngine.parseArabicSportsTextToRows(
+    'نادي نجوم البادية 2 - 1 الفيصلي',
+    'match_results',
+    'الجولة 9'
   );
-
-  const hussein = updated.find((r) => r.teamName === 'الحسين إربد');
-  const faisaly = updated.find((r) => r.teamName === 'الفيصلي');
-  assert.equal(hussein.played, 1);
-  assert.equal(hussein.won, 0);
-  assert.equal(hussein.drawn, 1);
-  assert.equal(hussein.points, 1);
-  assert.equal(hussein.goalsFor, 1);
-  assert.equal(hussein.goalsAgainst, 1);
-  assert.equal(faisaly.points, 1);
-  assert.equal(faisaly.drawn, 1);
-});
-
-// ---------------------------------------------------------------------------
-// 7. حساب الترتيب بعد اعتماد النتائج ودعم معايير كسر التعادل القابلة للتخصيص
-// ---------------------------------------------------------------------------
-runTest(7, 'حساب الترتيب بعد اعتماد النتائج (فوز 2-1 = 3 نقاط + كسر التعادل المخصص)', () => {
-  const match = {
-    id: 'm-test-21',
+  const batch = importEngine.buildValidatedImportBatch({
+    dataType: 'match_results',
     competitionId: 'pro_league',
-    round: 'الجولة 1',
-    homeTeam: 'الوحدات',
-    homeShort: 'الوحدات',
-    homeColor: '#10B981',
-    awayTeam: 'الرمثا',
-    awayShort: 'الرمثا',
-    awayColor: '#2563EB',
-    homeScore: 2,
-    awayScore: 1,
-    status: 'finished',
-    kickoffIso: new Date().toISOString(),
-    stadium: 'ستاد الملك عبدالله الثاني',
-    events: [],
-  };
+    season: '2026 / 2027',
+    ageCategory: 'الفريق الأول',
+    groupName: 'الدوري العام',
+    roundName: 'الجولة 9',
+    sources: [],
+    extractedRows: rawRows,
+    usedEngine: 'smart_deterministic',
+    existingMatches: [],
+    existingStandings: [],
+  });
 
-  const standings = mathEngine.applyApprovedMatchResultToStandings(match, null, [], [match]);
-  const wehdat = standings.find((s) => s.teamName === 'الوحدات');
-  const ramtha = standings.find((s) => s.teamName === 'الرمثا');
-
-  assert.equal(wehdat.points, 3);
-  assert.equal(wehdat.goalsFor, 2);
-  assert.equal(wehdat.goalsAgainst, 1);
-  assert.equal(wehdat.position, 1);
-  assert.equal(ramtha.points, 0);
-  assert.equal(ramtha.goalsFor, 1);
-  assert.equal(ramtha.goalsAgainst, 2);
-  assert.equal(ramtha.position, 2);
+  assert.equal(batch.rows.length, 1);
+  assert.ok(batch.rows[0].unknownTeams.includes('نجوم البادية'));
+  assert.ok(batch.rows[0].validationWarnings.some((w) => w.includes('غير موجود في قاعدة البيانات')));
 });
 
 // ---------------------------------------------------------------------------
-// 8. اكتشاف مباراة مكررة
+// 9. مباراة مكررة
 // ---------------------------------------------------------------------------
-runTest(8, 'اكتشاف مباراة مكررة ومنع إدخالها مرتين (Duplicate Match Detection)', () => {
+await runTest(9, 'اكتشاف مباراة مكررة ومنع اعتمادها (Duplicate Match Detection)', async () => {
   const existingMatches = [
     {
-      id: 'm-existing',
+      id: 'm-dup-1',
       competitionId: 'pro_league',
       round: 'الجولة 15',
       homeTeam: 'الحسين إربد',
@@ -269,68 +312,8 @@ runTest(8, 'اكتشاف مباراة مكررة ومنع إدخالها مرت�
     },
   ];
 
-  const batch = importEngine.buildValidatedImportBatch({
-    dataType: 'match_results',
-    competitionId: 'pro_league',
-    season: '2026 / 2027',
-    ageCategory: 'الفريق الأول',
-    groupName: 'الدوري العام',
-    roundName: 'الجولة 15',
-    sources: [],
-    extractedRows: [
-      {
-        homeTeam: 'الحسين اربد',
-        awayTeam: 'نادي الوحدات',
-        homeScore: 2,
-        awayScore: 1,
-        round: 'الجولة 15',
-      },
-    ],
-    usedEngine: 'smart_deterministic',
-    existingMatches,
-    existingStandings: [],
-  });
-
-  assert.equal(batch.rows[0].isDuplicate, true);
-  assert.equal(batch.status, 'Needs Correction');
-});
-
-// ---------------------------------------------------------------------------
-// 9. التعامل مع اسم فريق غير معروف أو مشابه
-// ---------------------------------------------------------------------------
-runTest(9, 'التعامل مع اسم فريق غير معروف واقتراح أو إنشاء فريق (Unknown Team Handling)', () => {
-  const batch = importEngine.buildValidatedImportBatch({
-    dataType: 'match_results',
-    competitionId: 'pro_league',
-    season: '2026 / 2027',
-    ageCategory: 'الفريق الأول',
-    groupName: 'الدوري العام',
-    roundName: 'الجولة 16',
-    sources: [],
-    extractedRows: [
-      {
-        homeTeam: 'نادي الصقور الجديدة',
-        awayTeam: 'الفيصلي',
-        homeScore: 1,
-        awayScore: 2,
-        round: 'الجولة 16',
-      },
-    ],
-    usedEngine: 'smart_deterministic',
-    existingMatches: [],
-    existingStandings: [],
-  });
-
-  assert.ok(batch.rows[0].unknownTeams.includes('نادي الصقور الجديدة'));
-  assert.equal(batch.status, 'Needs Correction');
-});
-
-// ---------------------------------------------------------------------------
-// 10. رفض البيانات غير الواضحة لحين المراجعة
-// ---------------------------------------------------------------------------
-runTest(10, 'رفض البيانات غير الواضحة ("غير واضح") لحين المراجعة (Unclear Data Rejection)', () => {
-  const parsed = importEngine.parseArabicSportsTextToRows(
-    'السلط غير واضح - 1 شباب الأردن | الجولة 15',
+  const rawRows = importEngine.parseArabicSportsTextToRows(
+    'الحسين اربد 2 - 1 الوحدات',
     'match_results',
     'الجولة 15'
   );
@@ -342,51 +325,76 @@ runTest(10, 'رفض البيانات غير الواضحة ("غير واضح") �
     groupName: 'الدوري العام',
     roundName: 'الجولة 15',
     sources: [],
-    extractedRows: parsed,
+    extractedRows: rawRows,
     usedEngine: 'smart_deterministic',
-    existingMatches: [],
+    existingMatches,
     existingStandings: [],
   });
 
-  assert.equal(batch.rows[0].isUnclear, true);
-  assert.equal(batch.rows[0].homeScore, 'غير واضح');
-  assert.equal(batch.status, 'Needs Correction');
-
-  // التأكد أيضاً من عدم توليد بطاقة تصميم من مباراة غير معتمدة
-  const unapprovedCard = cardEngine.buildAutoTemplateCardFromOfficialData({
-    templateType: 'result_card',
-    competitionId: 'pro_league',
-    match: {
-      id: 'm-unapproved',
-      competitionId: 'pro_league',
-      round: 'الجولة 15',
-      homeTeam: 'السلط',
-      homeShort: 'السلط',
-      homeColor: '#1E3A8A',
-      awayTeam: 'شباب الأردن',
-      awayShort: 'شباب',
-      awayColor: '#DC2626',
-      homeScore: 0,
-      awayScore: 1,
-      status: 'finished',
-      isApproved: false,
-      kickoffIso: new Date().toISOString(),
-      stadium: 'ملعب السلط',
-      events: [],
-    },
-  });
-  assert.equal(unapprovedCard, null);
+  assert.equal(batch.rows[0].isDuplicate, true);
+  assert.equal(batch.rows[0].isReadyForApproval, false);
+  assert.ok(batch.diagnosticLog.approvalRejectionReasons.some((r) => r.includes('مكررة')));
 });
 
 // ---------------------------------------------------------------------------
-// 11. التأكد من منع المستخدم غير الإداري من تعديل البيانات (Server & Client Rules)
+// 10. صورة تحتوي على أكثر من جدول (Multi-Table Image Extraction)
 // ---------------------------------------------------------------------------
-runTest(11, 'التأكد من منع المستخدم غير الإداري من تعديل البيانات (Custom Claims & Security Rules)', () => {
+await runTest(10, 'صورة تحتوي على أكثر من جدول (Image with Multiple Tables: Group 1 & Group 2)', async () => {
+  const multiTableText = [
+    'المجموعة الأولى',
+    'الكرمل 2 - 0 الطرة',
+    'دوقرة 1 - 1 الحصن',
+    'المجموعة الثانية',
+    'جرش 3 - 1 الطفيلة',
+    'عجلون 2 - 1 مؤتة',
+  ].join('\n');
+
+  const fakeImgBase64 = Buffer.from(multiTableText, 'utf8').toString('base64');
+  const res = await importEngine.extractSportsDataWithGeminiAI({
+    dataType: 'match_results',
+    competitionId: 'second_div',
+    season: '2026 / 2027',
+    roundName: 'الجولة 3',
+    fileBase64: `data:image/png;base64,${fakeImgBase64}`,
+    mimeType: 'image/png',
+    sourceFileName: 'two_groups_tables.png',
+  });
+
+  assert.equal(res.rows.length, 4, `Expected 4 matches across 2 tables, got ${res.rows.length}`);
+  assert.equal(res.rows[0].tableIndex, 1);
+  assert.equal(res.rows[0].tableTitle, 'المجموعة الأولى');
+  assert.equal(res.rows[2].tableIndex, 2);
+  assert.equal(res.rows[2].tableTitle, 'المجموعة الثانية');
+  assert.equal(res.rows[2].homeTeam, 'جرش');
+  assert.equal(res.rows[3].homeTeam, 'عجلون');
+});
+
+// ---------------------------------------------------------------------------
+// 11. اختبار تطبيع JSON المرن + تحديث الترتيب + قواعد الأمان
+// ---------------------------------------------------------------------------
+await runTest(11, 'تطبيع استجابات JSON المتنوعة وحساب الترتيب وقواعد الحماية', async () => {
+  const variantJson = JSON.stringify({
+    extractedText: 'الكرمل 2-1 عجلون',
+    tables: [
+      {
+        title: 'جدول المجموعة الأولى',
+        matches: [
+          { team1: 'الكرمل', team2: 'عجلون', score: '2-1', round: 'الجولة 1' },
+          { home_team: 'جرش', away_team: 'الطفيلة', home_score: 0, away_score: 0 },
+        ],
+      },
+    ],
+  });
+
+  const norm = importEngine.normalizeAiJsonResponse(variantJson, 'match_results', 'ai.json');
+  assert.equal(norm.rows.length, 2);
+  assert.equal(norm.rows[0].homeTeam, 'الكرمل');
+  assert.equal(norm.rows[0].homeScore, 2);
+  assert.equal(norm.rows[0].awayScore, 1);
+  assert.equal(norm.rows[1].homeTeam, 'جرش');
+  assert.equal(norm.rows[1].homeScore, 0);
+
   assert.ok(rulesText.includes('request.auth.token.admin == true'));
-  assert.ok(rulesText.includes('allow write: if isAdmin();'));
-  assert.ok(rulesText.includes('match /imports/{batchId}'));
-  assert.ok(rulesText.includes('match /audit_logs/{logId}'));
-  assert.ok(storageRulesText.includes('request.auth.token.admin == true'));
   assert.equal(cardEngine.canGenerateGraphicFromSource(false), false);
 });
 

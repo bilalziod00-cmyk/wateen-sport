@@ -239,46 +239,85 @@ export type ImportBatchStatus =
 
 export interface ImportedRowIssue {
   field: string;
-  type: 'unclear' | 'missing' | 'unknown_team' | 'duplicate' | 'conflict';
+  type: 'unclear' | 'missing' | 'unknown_team' | 'duplicate' | 'conflict' | 'warning';
+  blocking: boolean;
   message: string;
   suggestedTeamName?: string;
 }
 
+/**
+ * المخطط الموحد للمباراة والصف المستخرج (Unified Match & Sports Row Schema)
+ */
 export interface SmartImportExtractedRow {
   rowId: string;
   sourceFileName: string;
-  // حقول موحدة قابلة للتخصيص حسب نوع الاستيراد
-  teamName?: string;
-  homeTeam?: string;
-  awayTeam?: string;
-  homeScore?: number | string;
-  awayScore?: number | string;
+  tableIndex?: number;
+  tableTitle?: string;
+
+  // الحقول الإلزامية الموحدة للمباراة
+  competitionName?: string;
+  season?: string;
+  ageCategory?: string;
+  groupName?: string;
+  roundNumber?: string;
   round?: string;
   matchDate?: string;
+  matchTime?: string;
   kickoffTime?: string;
   stadium?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  homeScore?: number | string | null;
+  awayScore?: number | string | null;
+  matchStatus?: MatchStatus;
   status?: MatchStatus;
-  played?: number | string;
-  won?: number | string;
-  drawn?: number | string;
-  lost?: number | string;
-  goalsFor?: number | string;
-  goalsAgainst?: number | string;
-  points?: number | string;
+  sourceReference?: string;
+  extractionConfidence?: number; // 0..100
+  validationWarnings?: string[];
+
+  // حقول الترتيب واللاعبين والحراس
+  teamName?: string;
+  played?: number | string | null;
+  won?: number | string | null;
+  drawn?: number | string | null;
+  lost?: number | string | null;
+  goalsFor?: number | string | null;
+  goalsAgainst?: number | string | null;
+  points?: number | string | null;
   playerName?: string;
   playerPosition?: string;
-  goals?: number | string;
-  assists?: number | string;
-  matches?: number | string;
-  cleanSheets?: number | string;
-  goalsConceded?: number | string;
+  goals?: number | string | null;
+  assists?: number | string | null;
+  matches?: number | string | null;
+  cleanSheets?: number | string | null;
+  goalsConceded?: number | string | null;
   city?: string;
+
   // حالة التحقق البرمجي للصف
   isUnclear: boolean;
   isDuplicate: boolean;
   hasConflict: boolean;
+  isReadyForApproval?: boolean;
+  isApprovedRow?: boolean;
   unknownTeams: string[];
   issues: ImportedRowIssue[];
+}
+
+/**
+ * سجل تشخيصي للمطور (Developer Diagnostic Debug Log)
+ */
+export interface ImportDiagnosticLog {
+  timestamp: string;
+  fileTypes: string[];
+  extractedText: string;
+  rawAiResponseSanitized: string;
+  jsonItemsCount: number;
+  parsedObjectsCount: number;
+  readyObjectsCount: number;
+  needsCorrectionCount: number;
+  failedValidationFields: { rowIndex: number; field: string; reason: string }[];
+  approvalRejectionReasons: string[];
+  parseErrors: string[];
 }
 
 export interface ImportSourceFileMeta {
@@ -317,6 +356,7 @@ export interface SmartImportBatch {
   approvedBy?: string;
   approvedAt?: string;
   rejectedReason?: string;
+  diagnosticLog?: ImportDiagnosticLog;
   revisions: ImportRevisionEntry[];
 }
 

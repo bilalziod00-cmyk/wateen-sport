@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  Bug,
   CheckCircle2,
   FileSpreadsheet,
   FileText,
@@ -42,20 +43,20 @@ import {
 } from '../../types/sports';
 import {
   buildValidatedImportBatch,
+  extractEmbeddedOcrTextFromImageBase64,
   extractSportsDataWithGeminiAI,
   extractTextFromExcelBuffer,
   extractTextFromPdfBuffer,
   validateExtractedImportRows,
 } from '../../utils/aiSmartImportEngine';
-import { UNCLEAR_VALUE_MARKER } from '../../utils/sportsMathEngine';
 
 const STATUS_BADGES: Record<ImportBatchStatus, { label: string; style: string }> = {
   'Pending Review': {
-    label: 'Pending Review • بانتظار المراجعة',
+    label: 'Pending Review • جاهز للمراجعة والاعتماد',
     style: 'bg-sky-500/15 text-sky-300 border-sky-500/35',
   },
   'Needs Correction': {
-    label: 'Needs Correction • يحتاج تصحيح',
+    label: 'Needs Correction • يحتوي عناصر تحتاج تصحيحاً',
     style: 'bg-amber-500/20 text-amber-300 border-amber-500/45',
   },
   Approved: {
@@ -86,7 +87,6 @@ export const AdminSmartImportCenter: React.FC = () => {
     recalculateCompetitionStandings,
   } = useAppData();
 
-  // إعدادات سياق الاستيراد (البطولة، الموسم، الفئة، المجموعة، الجولة، ونوع البيانات)
   const [competitionId, setCompetitionId] = useState<CompetitionId>('pro_league');
   const currentRule: CompetitionRuleConfig =
     data.competitionRules?.[competitionId] ||
@@ -103,7 +103,6 @@ export const AdminSmartImportCenter: React.FC = () => {
   const [roundName, setRoundName] = useState<string>('الجولة 15');
   const [dataType, setDataType] = useState<SmartImportDataType>('match_results');
 
-  // مصادر الإدخال (ملفات متعددة + نص منسوخ)
   const [stagedFiles, setStagedFiles] = useState<
     {
       meta: ImportSourceFileMeta;
@@ -114,17 +113,24 @@ export const AdminSmartImportCenter: React.FC = () => {
   const [pastedText, setPastedText] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
-  // دفعة المراجعة النشطة
   const [activeBatchId, setActiveBatchId] = useState<string | null>(
     data.importBatches?.[0]?.id || null
   );
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [showDebugLog, setShowDebugLog] = useState<boolean>(false);
   const [ruleDraft, setRuleDraft] = useState<CompetitionRuleConfig>(currentRule);
   const [actorName, setActorName] = useState<string>('المدير الرياضي - وتين سبورت');
 
   const batches = data.importBatches || [];
   const activeBatch: SmartImportBatch | null =
     batches.find((b) => b.id === activeBatchId) || batches[0] || null;
+
+  const allKnownTeams = Array.from(
+    new Set([
+      ...(data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY).map((t) => t.name),
+      ...data.standings.map((s) => s.teamName),
+    ])
+  ).sort((a, b) => a.localeCompare(b, 'ar'));
 
   const handleCompetitionChange = (nextId: CompetitionId) => {
     setCompetitionId(nextId);
@@ -154,7 +160,11 @@ export const AdminSmartImportCenter: React.FC = () => {
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
       let format: ImportSourceFormat = 'image';
       if (ext === 'pdf' || file.type === 'application/pdf') format = 'pdf';
-      else if (['xlsx', 'xls', 'csv', 'tsv'].includes(ext) || file.type.includes('spreadsheet') || file.type.includes('csv'))
+      else if (
+        ['xlsx', 'xls', 'csv', 'tsv'].includes(ext) ||
+        file.type.includes('spreadsheet') ||
+        file.type.includes('csv')
+      )
         format = 'excel_csv';
 
       const id = `src-${Date.now()}-${i}`;
@@ -168,7 +178,7 @@ export const AdminSmartImportCenter: React.FC = () => {
             name: file.name,
             mimeType: file.type || 'text/csv',
             format,
-            rawTextPreview: text.slice(0, 600),
+            rawTextPreview: text.slice(0, 1200),
             sizeBytes: file.size,
           },
           extractedText: text,
@@ -183,7 +193,8 @@ export const AdminSmartImportCenter: React.FC = () => {
             name: file.name,
             mimeType: 'application/pdf',
             format: 'pdf',
-            rawTextPreview: pdfText ? pdfText.slice(0, 600) : 'ملف PDF جاهز للتحليل البصري عبر Gemini AI',
+            rawTextPreview:
+              pdfText ? pdfText.slice(0, 1200) : 'ملف PDF جاهز للتحليل البصري عبر Gemini AI',
             sizeBytes: file.size,
           },
           base64: dataUrl,
@@ -191,6 +202,7 @@ export const AdminSmartImportCenter: React.FC = () => {
         });
       } else {
         const dataUrl = await readFileAsDataUrl(file);
+        const embeddedOcr = extractEmbeddedOcrTextFromImageBase64(dataUrl);
         newStaged.push({
           meta: {
             id,
@@ -198,9 +210,11 @@ export const AdminSmartImportCenter: React.FC = () => {
             mimeType: file.type || 'image/jpeg',
             format: 'image',
             previewDataUrl: dataUrl,
+            rawTextPreview: embeddedOcr || undefined,
             sizeBytes: file.size,
           },
           base64: dataUrl,
+          extractedText: embeddedOcr || undefined,
         });
       }
     }
@@ -210,7 +224,7 @@ export const AdminSmartImportCenter: React.FC = () => {
     e.target.value = '';
   };
 
-  // تشغيل الذكاء الاصطناعي وطبقة التحقق البرمجية على جميع المصادر المرفوعة والنص المنسوخ
+  // تشغيل الذكاء الاصطناعي وطبقة التحقق البرمجية
   const handleRunSmartExtraction = async () => {
     if (stagedFiles.length === 0 && !pastedText.trim()) {
       showToast('يرجى رفع صورة / ملف (PDF أو Excel) أو لصق نص رياضي أولاً', 'crimson');
@@ -220,11 +234,15 @@ export const AdminSmartImportCenter: React.FC = () => {
     setIsAnalyzing(true);
     try {
       const allExtractedRows: Partial<SmartImportExtractedRow>[] = [];
-      const sourceMetas: ImportSourceFileMeta[] = stagedFiles.map((s) => s.meta);
+      const sourceMetas: ImportSourceFileMeta[] = stagedFiles.map((s) => ({ ...s.meta }));
       let usedEngine: 'gemini_multimodal' | 'smart_deterministic' = 'smart_deterministic';
+      const combinedExtractedTexts: string[] = [];
+      const combinedRawResponses: string[] = [];
+      const combinedParseErrors: string[] = [];
+      let totalJsonItems = 0;
 
-      // 1) معالجة كل ملف مرفوع (يدعم عدة صور أو ملفات في عملية استيراد واحدة)
-      for (const item of stagedFiles) {
+      for (let i = 0; i < stagedFiles.length; i++) {
+        const item = stagedFiles[i];
         const res = await extractSportsDataWithGeminiAI({
           dataType,
           competitionId,
@@ -239,17 +257,25 @@ export const AdminSmartImportCenter: React.FC = () => {
         if (res.usedEngine === 'gemini_multimodal') {
           usedEngine = 'gemini_multimodal';
         }
+        if (res.extractedOcrText) {
+          sourceMetas[i].rawTextPreview = res.extractedOcrText.slice(0, 1500);
+          combinedExtractedTexts.push(res.extractedOcrText);
+        }
+        if (res.rawAiResponseSanitized) {
+          combinedRawResponses.push(res.rawAiResponseSanitized);
+        }
+        totalJsonItems += res.jsonItemsCount;
+        combinedParseErrors.push(...res.parseErrors);
         allExtractedRows.push(...res.rows);
       }
 
-      // 2) معالجة النص المنسوخ إن وجد
       if (pastedText.trim()) {
         sourceMetas.push({
           id: `src-text-${Date.now()}`,
           name: 'نص رياضي ملصق',
           mimeType: 'text/plain',
           format: 'pasted_text',
-          rawTextPreview: pastedText.trim().slice(0, 600),
+          rawTextPreview: pastedText.trim().slice(0, 1500),
           sizeBytes: pastedText.length,
         });
 
@@ -265,6 +291,14 @@ export const AdminSmartImportCenter: React.FC = () => {
         if (textRes.usedEngine === 'gemini_multimodal') {
           usedEngine = 'gemini_multimodal';
         }
+        if (textRes.extractedOcrText) {
+          combinedExtractedTexts.push(textRes.extractedOcrText);
+        }
+        if (textRes.rawAiResponseSanitized) {
+          combinedRawResponses.push(textRes.rawAiResponseSanitized);
+        }
+        totalJsonItems += textRes.jsonItemsCount;
+        combinedParseErrors.push(...textRes.parseErrors);
         allExtractedRows.push(...textRes.rows);
       }
 
@@ -283,29 +317,44 @@ export const AdminSmartImportCenter: React.FC = () => {
         existingStandings: data.standings,
         directory: data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
         rule: currentRule,
+        diagnosticMeta: {
+          extractedText: combinedExtractedTexts.join('\n---\n'),
+          rawAiResponseSanitized: combinedRawResponses.join('\n---\n'),
+          jsonItemsCount: totalJsonItems,
+          parseErrors: combinedParseErrors,
+        },
       });
 
       await saveImportBatch(batch);
       setActiveBatchId(batch.id);
       setStagedFiles([]);
       setPastedText('');
-      showToast(
-        `تم استخراج ${batch.rows.length} صفوف وتحويلها لشاشة المراجعة (${
-          batch.status === 'Needs Correction' ? 'تحتاج مراجعة وتصحيح' : 'جاهزة للاعتماد'
-        })`,
-        batch.status === 'Needs Correction' ? 'amber' : 'emerald'
-      );
+
+      const readyCount = batch.rows.filter((r) => r.isReadyForApproval).length;
+      const corrCount = batch.rows.length - readyCount;
+
+      if (batch.rows.length === 0) {
+        showToast(
+          'لم يتم العثور على مباريات قابلة للاستخراج — راجع النص المستخرج أو سجل التشخيص للمطور',
+          'crimson'
+        );
+      } else {
+        showToast(
+          `تم اكتشاف ${batch.rows.length} عناصر (${readyCount} جاهزة للمراجعة، ${corrCount} تحتاج تصحيحاً)`,
+          corrCount > 0 ? 'amber' : 'emerald'
+        );
+      }
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // تحديث خلية داخل شاشة المراجعة وإعادة التحقق البرمجي فوراً
+  // تحديث حقل في بطاقة المباراة داخل شاشة المراجعة وإعادة التحقق فوراً
   const handleUpdateBatchRowField = async (
     batch: SmartImportBatch,
     rowId: string,
     field: keyof SmartImportExtractedRow,
-    value: string | number
+    value: string | number | null
   ) => {
     const updatedRawRows = batch.rows.map((r) =>
       r.rowId === rowId ? { ...r, [field]: value } : r
@@ -317,19 +366,23 @@ export const AdminSmartImportCenter: React.FC = () => {
       data.matches,
       data.standings,
       data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
-      data.competitionRules?.[batch.competitionId]
+      data.competitionRules?.[batch.competitionId],
+      {
+        season: batch.season,
+        ageCategory: batch.ageCategory,
+        groupName: batch.groupName,
+        roundName: batch.roundName,
+      }
     );
-    const hasIssues = revalidated.some(
-      (r) => r.isUnclear || r.isDuplicate || r.hasConflict || r.unknownTeams.length > 0
-    );
+    const hasBlocking = revalidated.some((r) => !r.isReadyForApproval);
     await saveImportBatch({
       ...batch,
       rows: revalidated,
-      status: hasIssues ? 'Needs Correction' : 'Pending Review',
+      status: hasBlocking ? 'Needs Correction' : 'Pending Review',
     });
   };
 
-  // إضافة صف جديد في شاشة المراجعة
+  // إضافة مباراة / صف جديد يدوياً داخل شاشة المراجعة
   const handleAddRowToBatch = async (batch: SmartImportBatch) => {
     const newRow: Partial<SmartImportExtractedRow> =
       batch.dataType === 'standings_table'
@@ -374,8 +427,10 @@ export const AdminSmartImportCenter: React.FC = () => {
             awayTeam: 'الوحدات',
             homeScore: 1,
             awayScore: 0,
+            roundNumber: batch.roundName || 'الجولة 15',
             round: batch.roundName || 'الجولة 15',
             stadium: 'ستاد الحسن - إربد',
+            matchStatus: 'finished',
             status: 'finished',
           };
 
@@ -386,19 +441,23 @@ export const AdminSmartImportCenter: React.FC = () => {
       data.matches,
       data.standings,
       data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
-      data.competitionRules?.[batch.competitionId]
+      data.competitionRules?.[batch.competitionId],
+      {
+        season: batch.season,
+        ageCategory: batch.ageCategory,
+        groupName: batch.groupName,
+        roundName: batch.roundName,
+      }
     );
-    const hasIssues = revalidated.some(
-      (r) => r.isUnclear || r.isDuplicate || r.hasConflict || r.unknownTeams.length > 0
-    );
+    const hasBlocking = revalidated.some((r) => !r.isReadyForApproval);
     await saveImportBatch({
       ...batch,
       rows: revalidated,
-      status: hasIssues ? 'Needs Correction' : 'Pending Review',
+      status: hasBlocking ? 'Needs Correction' : 'Pending Review',
     });
   };
 
-  // حذف صف من شاشة المراجعة
+  // حذف مباراة / صف خاطئ من شاشة المراجعة
   const handleDeleteRowFromBatch = async (batch: SmartImportBatch, rowId: string) => {
     const remaining = batch.rows.filter((r) => r.rowId !== rowId);
     const revalidated = validateExtractedImportRows(
@@ -408,19 +467,83 @@ export const AdminSmartImportCenter: React.FC = () => {
       data.matches,
       data.standings,
       data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
-      data.competitionRules?.[batch.competitionId]
+      data.competitionRules?.[batch.competitionId],
+      {
+        season: batch.season,
+        ageCategory: batch.ageCategory,
+        groupName: batch.groupName,
+        roundName: batch.roundName,
+      }
     );
-    const hasIssues = revalidated.some(
-      (r) => r.isUnclear || r.isDuplicate || r.hasConflict || r.unknownTeams.length > 0
-    );
+    const hasBlocking = revalidated.some((r) => !r.isReadyForApproval);
     await saveImportBatch({
       ...batch,
       rows: revalidated,
-      status: hasIssues ? 'Needs Correction' : 'Pending Review',
+      status: hasBlocking ? 'Needs Correction' : 'Pending Review',
     });
   };
 
-  // إنشاء فريق جديد مباشرة من شاشة المراجعة وإعادة التحقق
+  // إعادة تحليل المصدر الأصلي (النص المستخرج أو المنسوخ)
+  const handleReanalyzeSource = async (batch: SmartImportBatch) => {
+    const rawSourceText =
+      batch.rawPastedText ||
+      batch.diagnosticLog?.extractedText ||
+      batch.sources.map((s) => s.rawTextPreview || '').join('\n');
+
+    if (rawSourceText.trim()) {
+      const res = await extractSportsDataWithGeminiAI({
+        dataType: batch.dataType,
+        competitionId: batch.competitionId,
+        season: batch.season,
+        roundName: batch.roundName,
+        rawText: rawSourceText,
+        sourceFileName: batch.sources[0]?.name || 'إعادة تحليل المصدر',
+        geminiApiKey: data.geminiApiKey,
+      });
+
+      const revalidated = validateExtractedImportRows(
+        res.rows.length > 0 ? res.rows : batch.rows,
+        batch.dataType,
+        batch.competitionId,
+        data.matches,
+        data.standings,
+        data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
+        data.competitionRules?.[batch.competitionId],
+        {
+          season: batch.season,
+          ageCategory: batch.ageCategory,
+          groupName: batch.groupName,
+          roundName: batch.roundName,
+        }
+      );
+      const hasBlocking = revalidated.some((r) => !r.isReadyForApproval);
+      await saveImportBatch({
+        ...batch,
+        rows: revalidated,
+        status: hasBlocking ? 'Needs Correction' : 'Pending Review',
+      });
+      showToast(`تمت إعادة تحليل المصدر (${revalidated.length} عناصر)`, 'emerald');
+      return;
+    }
+
+    const revalidated = validateExtractedImportRows(
+      batch.rows,
+      batch.dataType,
+      batch.competitionId,
+      data.matches,
+      data.standings,
+      data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
+      data.competitionRules?.[batch.competitionId]
+    );
+    const hasBlocking = revalidated.some((r) => !r.isReadyForApproval);
+    await saveImportBatch({
+      ...batch,
+      rows: revalidated,
+      status: hasBlocking ? 'Needs Correction' : 'Pending Review',
+    });
+    showToast('تمت إعادة فحص جميع البطاقات برمجياً', 'emerald');
+  };
+
   const handleCreateNewTeamFromReview = async (
     batch: SmartImportBatch,
     unknownTeamName: string
@@ -439,17 +562,14 @@ export const AdminSmartImportCenter: React.FC = () => {
       updatedDir,
       data.competitionRules?.[batch.competitionId]
     );
-    const hasIssues = revalidated.some(
-      (r) => r.isUnclear || r.isDuplicate || r.hasConflict || r.unknownTeams.length > 0
-    );
+    const hasBlocking = revalidated.some((r) => !r.isReadyForApproval);
     await saveImportBatch({
       ...batch,
       rows: revalidated,
-      status: hasIssues ? 'Needs Correction' : 'Pending Review',
+      status: hasBlocking ? 'Needs Correction' : 'Pending Review',
     });
   };
 
-  // ربط اسم فريق غير معروف بفريق موجود
   const handleLinkUnknownTeam = async (
     batch: SmartImportBatch,
     rowId: string,
@@ -475,17 +595,14 @@ export const AdminSmartImportCenter: React.FC = () => {
       data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
       data.competitionRules?.[batch.competitionId]
     );
-    const hasIssues = revalidated.some(
-      (r) => r.isUnclear || r.isDuplicate || r.hasConflict || r.unknownTeams.length > 0
-    );
+    const hasBlocking = revalidated.some((r) => !r.isReadyForApproval);
     await saveImportBatch({
       ...batch,
       rows: revalidated,
-      status: hasIssues ? 'Needs Correction' : 'Pending Review',
+      status: hasBlocking ? 'Needs Correction' : 'Pending Review',
     });
   };
 
-  // تحريك ترتيب معايير كسر التعادل لأعلى أو لأسفل
   const moveTiebreaker = (idx: number, dir: -1 | 1) => {
     const list = [...ruleDraft.tiebreakers];
     const targetIdx = idx + dir;
@@ -496,8 +613,20 @@ export const AdminSmartImportCenter: React.FC = () => {
     setRuleDraft({ ...ruleDraft, tiebreakers: list });
   };
 
+  const totalDetectedCount = activeBatch?.rows.length || 0;
+  const readyForReviewCount =
+    activeBatch?.rows.filter((r) => r.isReadyForApproval).length || 0;
+  const needsCorrectionCount = totalDetectedCount - readyForReviewCount;
+
   return (
     <div className="space-y-6">
+      {/* قائمة الفرق المعتمدة للاختيار السريع في جميع حقول الفرق */}
+      <datalist id="wateen-teams-db">
+        {allKnownTeams.map((team) => (
+          <option key={team} value={team} />
+        ))}
+      </datalist>
+
       {/* 1. ترويسة مركز الإدخال الذكي وإعدادات البطولة */}
       <div className="rounded-3xl bg-gradient-to-l from-emerald-500/20 via-[#0E1824] to-[#090F17] border border-emerald-500/35 p-4 sm:p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -511,11 +640,11 @@ export const AdminSmartImportCenter: React.FC = () => {
                   مركز الإدخال الذكي — AI Sports Data Import
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Gemini AI + تحقق برمجي
+                  OCR + JSON Schema + تحقق برمجي
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                استيراد الجداول والنتائج والترتيب والإحصائيات من الصور (JPG/PNG)، PDF، Excel (XLSX/CSV)، والنصوص مع شاشة مراجعة واعتماد
+                استيراد الجداول والفقرات الإخبارية والنتائج من الصور (JPG/PNG)، PDF، Excel (XLSX/CSV)، والنصوص
               </p>
             </div>
           </div>
@@ -690,7 +819,7 @@ export const AdminSmartImportCenter: React.FC = () => {
 
             <div>
               <div className="text-xs font-extrabold text-slate-300 mb-2">
-                ترتيب معايير كسر التعادل عند تساوي النقاط (قابلة لإعادة الترتيب حسب لائحة البطولة):
+                ترتيب معايير كسر التعادل عند تساوي النقاط:
               </div>
               <div className="space-y-1.5">
                 {ruleDraft.tiebreakers.map((tb: TieBreakerCriterion, idx: number) => (
@@ -749,7 +878,7 @@ export const AdminSmartImportCenter: React.FC = () => {
             1. اختر نوع البيانات المراد استخراجها
           </h3>
           <span className="text-[11px] text-slate-400">
-            مخطط JSON ثابت + فحص برمجي مستقل لكل نوع
+            يدعم الجداول، الفقرات الإخبارية، والصيغ المتعددة
           </span>
         </div>
 
@@ -784,14 +913,14 @@ export const AdminSmartImportCenter: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-white flex items-center gap-1.5">
                   <Upload className="w-4 h-4 text-emerald-400" />
-                  رفع صور أو ملفات (يدعم تعدد الملفات في عملية واحدة)
+                  رفع صور أو ملفات (يدعم تعدد الملفات والجداول)
                 </span>
                 <span className="text-[10px] text-emerald-300 font-bold">
                   JPG • PNG • PDF • XLSX • CSV
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                ارفع صورة جدول ترتيب، كشف نتائج جولة، ملف PDF من الاتحاد، أو ملف Excel ليقوم النظام بقراءتها وربط الملف الأصلي بعملية المراجعة.
+                ارفع صورة جدول نتائج أو ترتيب، ملف PDF، أو ملف Excel يحتوي على عدة جولات ليتم استخراجها وعرض النص المقروء للمقارنة.
               </p>
             </div>
 
@@ -841,11 +970,11 @@ export const AdminSmartImportCenter: React.FC = () => {
             )}
           </div>
 
-          {/* صندوق لصق النصوص الرياضية العربية */}
+          {/* صندوق لصق النصوص والفقرات الرياضية العربية */}
           <div className="rounded-2xl bg-black/50 border border-white/15 p-4 flex flex-col justify-between space-y-2.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1">
               <span className="text-xs font-black text-white">
-                لصق نص رياضي منسوخ (مباريات، نتائج جولة، ترتيب، هدافين، حراس)
+                لصق فقرة إخبارية أو جدول أو نتائج بصيغ متعددة
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -853,12 +982,12 @@ export const AdminSmartImportCenter: React.FC = () => {
                   onClick={() => {
                     setDataType('match_results');
                     setPastedText(
-                      `الحسين إربد 2 - 1 الوحدات | الجولة 15 | ستاد الحسن - إربد\nالفيصلي 3 - 0 الرمثا | الجولة 15 | ستاد عمّان الدولي\nالسلط غير واضح - 1 شباب الأردن | الجولة 15 | ملعب السلط\nاتحاد جرش الجديد 1 - 0 الأهلي | الجولة 15 | ملعب جرش البلدي`
+                      `فاز الكرمل على عجلون 2-1، وتغلب الحسين إربد على الوحدات (٣-٠)، وتعادل الفيصلي والرمثا 1-1 على ستاد عمّان الدولي.\nالسلط (2) شباب الأردن (1)\nالأهلي ? - 1 الجزيرة`
                     );
                   }}
                   className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold text-emerald-300"
                 >
-                  مثال نتائج + حالات فحص
+                  مثال فقرة + صيغ متعددة
                 </button>
                 <button
                   type="button"
@@ -879,7 +1008,7 @@ export const AdminSmartImportCenter: React.FC = () => {
               rows={5}
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
-              placeholder="الصق هنا نتائج المباريات، جدول الترتيب، أو قائمة الهدافين... (أي قيمة غير مقروءة بثقة سيتم تمييزها بعلامة 'غير واضح' للمراجعة)"
+              placeholder="يدعم جميع الصيغ: (الكرمل 2 - 1 عجلون)، (الكرمل (2) عجلون (1))، الفقرات الإخبارية التي تضم عدة مباريات، أو الجداول المنسوخة..."
               className="w-full rounded-xl bg-[#090E15] border border-white/15 p-3 text-xs text-white placeholder:text-slate-500 focus:border-emerald-400 outline-none leading-relaxed"
             />
 
@@ -891,14 +1020,14 @@ export const AdminSmartImportCenter: React.FC = () => {
             >
               <Sparkles className="w-4 h-4" />
               {isAnalyzing
-                ? 'جارٍ استخراج البيانات والتحقق البرمجي المستقل...'
+                ? 'جارٍ استخراج المباريات والتحقق البرمجي المستقل...'
                 : 'بدء التحليل الذكي وتحويل البيانات لشاشة المراجعة'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* 4. شاشة المراجعة والاعتماد (Review & Approval Screen) */}
+      {/* 4. شاشة المراجعة والاعتماد المحسّنة (Review & Approval Screen) */}
       {batches.length > 0 && activeBatch && (
         <div className="rounded-3xl bg-[#0B131E] border border-emerald-500/35 p-4 sm:p-5 space-y-4">
           {/* شريط اختيار دفعات الاستيراد وحالاتها */}
@@ -925,6 +1054,14 @@ export const AdminSmartImportCenter: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDebugLog((v) => !v)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10"
+              >
+                <Bug className="w-3.5 h-3.5 text-amber-400" />
+                سجل التشخيص للمطور (Debug)
+              </button>
               <span
                 className={`px-3 py-1 rounded-full text-xs font-black border ${
                   STATUS_BADGES[activeBatch.status].style
@@ -935,13 +1072,126 @@ export const AdminSmartImportCenter: React.FC = () => {
             </div>
           </div>
 
-          {/* مقارنة المصدر بالبيانات المستخرجة */}
+          {/* ملخص الأعداد الفعلي: تم اكتشاف X مباريات | Y جاهزة للمراجعة | Z تحتاج تصحيحاً */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-2xl bg-black/50 border border-white/15 p-3.5 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-slate-400">إجمالي العناصر المكتشفة</div>
+                <div className="text-base sm:text-lg font-black text-white mt-0.5">
+                  تم اكتشاف {totalDetectedCount} مباريات / صفوف
+                </div>
+              </div>
+              <span className="text-2xl font-black text-white tabular-nums">
+                {totalDetectedCount}
+              </span>
+            </div>
+
+            <div className="rounded-2xl bg-emerald-950/30 border border-emerald-500/40 p-3.5 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-emerald-300">جاهزة للمراجعة والاعتماد</div>
+                <div className="text-base sm:text-lg font-black text-emerald-200 mt-0.5">
+                  {readyForReviewCount} مباريات جاهزة للمراجعة
+                </div>
+              </div>
+              <span className="text-2xl font-black text-emerald-400 tabular-nums">
+                {readyForReviewCount}
+              </span>
+            </div>
+
+            <div
+              className={`rounded-2xl border p-3.5 flex items-center justify-between ${
+                needsCorrectionCount > 0
+                  ? 'bg-amber-950/30 border-amber-500/45'
+                  : 'bg-black/40 border-white/10'
+              }`}
+            >
+              <div>
+                <div className="text-xs font-bold text-amber-300">تحتاج مراجعة وتصحيحاً</div>
+                <div className="text-base sm:text-lg font-black text-amber-200 mt-0.5">
+                  {needsCorrectionCount === 1
+                    ? 'مباراة واحدة تحتاج تصحيحاً'
+                    : `${needsCorrectionCount} مباريات تحتاج تصحيحاً`}
+                </div>
+              </div>
+              <span className="text-2xl font-black text-amber-400 tabular-nums">
+                {needsCorrectionCount}
+              </span>
+            </div>
+          </div>
+
+          {/* سجل التشخيص الداخلي للمطور (Developer Diagnostic Debug Log) */}
+          {showDebugLog && activeBatch.diagnosticLog && (
+            <div className="rounded-2xl bg-black/90 border border-amber-500/40 p-4 space-y-3 text-xs font-mono">
+              <div className="flex items-center justify-between text-amber-300 font-sans font-black">
+                <span>سجل التشخيص الداخلي للمطور (Developer Import Debug Log)</span>
+                <span className="text-[11px] text-slate-400">
+                  {activeBatch.diagnosticLog.timestamp}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-sans">
+                <div className="bg-white/5 rounded-xl p-2">
+                  <div className="text-[10px] text-slate-400">نوع الملفات</div>
+                  <div className="font-bold text-white truncate">
+                    {activeBatch.diagnosticLog.fileTypes.join(', ') || 'نص مباشر'}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-2">
+                  <div className="text-[10px] text-slate-400">عناصر JSON الخام</div>
+                  <div className="font-black text-emerald-300">
+                    {activeBatch.diagnosticLog.jsonItemsCount}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-2">
+                  <div className="text-[10px] text-slate-400">الكائنات المحوّلة</div>
+                  <div className="font-black text-sky-300">
+                    {activeBatch.diagnosticLog.parsedObjectsCount}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-2">
+                  <div className="text-[10px] text-slate-400">الحقول المرفوضة</div>
+                  <div className="font-black text-rose-300">
+                    {activeBatch.diagnosticLog.failedValidationFields.length}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-sans font-bold text-slate-400 mb-1">
+                  النص المستخرج (OCR / Source Text):
+                </div>
+                <pre className="bg-[#070B10] border border-white/10 rounded-xl p-2.5 text-[11px] text-slate-300 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                  {activeBatch.diagnosticLog.extractedText || '(لا يوجد نص خام)'}
+                </pre>
+              </div>
+              <div>
+                <div className="text-[11px] font-sans font-bold text-slate-400 mb-1">
+                  استجابة الذكاء الاصطناعي / المحلل الخام (Sanitized):
+                </div>
+                <pre className="bg-[#070B10] border border-white/10 rounded-xl p-2.5 text-[11px] text-emerald-300 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                  {activeBatch.diagnosticLog.rawAiResponseSanitized}
+                </pre>
+              </div>
+              {activeBatch.diagnosticLog.approvalRejectionReasons.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-sans font-bold text-rose-300 mb-1">
+                    أسباب إيقاف اعتماد الصفوف الناقصة:
+                  </div>
+                  <ul className="list-disc list-inside text-[11px] text-rose-200 font-sans space-y-0.5">
+                    {activeBatch.diagnosticLog.approvalRejectionReasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* مقارنة المصدر بالبطاقات المستخرجة */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* العمود الأول: معاينة ملف/صورة/نص المصدر الأصلي */}
+            {/* العمود الأول: صورة/ملف المصدر + النص المستخرج للمقارنة */}
             <div className="rounded-2xl bg-black/55 border border-white/10 p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black text-emerald-300">
-                  المصدر الأصلي المحفوظ للمراجعة ({activeBatch.sources.length})
+                  المصدر الأصلي والنص المستخرج ({activeBatch.sources.length})
                 </h4>
                 <span className="text-[10px] text-slate-400">
                   {activeBatch.usedEngine === 'gemini_multimodal'
@@ -964,14 +1214,19 @@ export const AdminSmartImportCenter: React.FC = () => {
                     />
                   )}
                   {src.rawTextPreview && (
-                    <pre className="text-[11px] text-slate-300 bg-black/70 p-2.5 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono max-h-40">
-                      {src.rawTextPreview}
-                    </pre>
+                    <div>
+                      <div className="text-[10px] font-bold text-emerald-400 mb-1">
+                        النص المستخرج للمقارنة مع المصدر:
+                      </div>
+                      <pre className="text-[11px] text-slate-300 bg-black/70 p-2.5 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono max-h-44">
+                        {src.rawTextPreview}
+                      </pre>
+                    </div>
                   )}
                 </div>
               ))}
 
-              {/* سجل التعديلات والاعتماد لهذه الدفعة */}
+              {/* سجل التعديلات والاعتماد */}
               <div className="pt-2 border-t border-white/10 space-y-1.5">
                 <div className="text-[11px] font-black text-slate-300 flex items-center gap-1">
                   <History className="w-3.5 h-3.5 text-emerald-400" />
@@ -989,15 +1244,15 @@ export const AdminSmartImportCenter: React.FC = () => {
               </div>
             </div>
 
-            {/* العمود الثاني والثالث: جدول البيانات المستخرجة القابل للتعديل */}
+            {/* العمود الثاني والثالث: بطاقات المباريات المستقلة مع إبراز الحقول غير الواضحة فقط */}
             <div className="lg:col-span-2 rounded-2xl bg-black/45 border border-white/10 p-3.5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h4 className="text-xs sm:text-sm font-black text-white">
-                    مراجعة ومطابقة البيانات المستخرجة قبل الاعتماد الرسمي
+                    بطاقات المراجعة المستقلة ({totalDetectedCount})
                   </h4>
                   <p className="text-[11px] text-slate-400">
-                    لا يتم حفظ أي بيانات في الجداول الرسمية إلا بعد مراجعتها وتصحيح أي حقل يحمل علامة «غير واضح»
+                    يمكنك اعتماد المباريات الجاهزة ({readyForReviewCount}) فوراً، بينما تبقى المباريات الناقصة ({needsCorrectionCount}) في المسودة لحين استكمالها
                   </p>
                 </div>
 
@@ -1008,82 +1263,83 @@ export const AdminSmartImportCenter: React.FC = () => {
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-extrabold"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    إضافة صف
+                    إضافة مباراة يدوياً
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const revalidated = validateExtractedImportRows(
-                        activeBatch.rows,
-                        activeBatch.dataType,
-                        activeBatch.competitionId,
-                        data.matches,
-                        data.standings,
-                        data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
-                        data.competitionRules?.[activeBatch.competitionId]
-                      );
-                      const hasIssues = revalidated.some(
-                        (r) =>
-                          r.isUnclear ||
-                          r.isDuplicate ||
-                          r.hasConflict ||
-                          r.unknownTeams.length > 0
-                      );
-                      await saveImportBatch({
-                        ...activeBatch,
-                        rows: revalidated,
-                        status: hasIssues ? 'Needs Correction' : 'Pending Review',
-                      });
-                      showToast('تمت إعادة فحص وتحليل جميع الصفوف برمجياً', 'emerald');
-                    }}
+                    onClick={() => handleReanalyzeSource(activeBatch)}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-300 text-xs font-extrabold"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    إعادة التحليل
+                    إعادة تحليل المصدر
                   </button>
                 </div>
               </div>
 
-              {/* قائمة الصفوف المستخرجة مع تمييز الأخطاء والقيم غير الواضحة */}
-              <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+              {/* قائمة البطاقات المستخرجة */}
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
                 {activeBatch.rows.map((row, rIdx) => {
-                  const hasRowIssue =
-                    row.isUnclear ||
-                    row.isDuplicate ||
-                    row.hasConflict ||
-                    row.unknownTeams.length > 0;
+                  const isReady = Boolean(row.isReadyForApproval);
+                  const isHomeTeamUnclear = !row.homeTeam;
+                  const isAwayTeamUnclear = !row.awayTeam;
+                  const isHomeScoreUnclear =
+                    row.matchStatus === 'finished' &&
+                    (row.homeScore === null || row.homeScore === undefined || row.homeScore === '');
+                  const isAwayScoreUnclear =
+                    row.matchStatus === 'finished' &&
+                    (row.awayScore === null || row.awayScore === undefined || row.awayScore === '');
 
                   return (
                     <div
                       key={row.rowId}
-                      className={`rounded-2xl border p-3 space-y-2.5 transition-all ${
-                        hasRowIssue
-                          ? 'bg-amber-950/25 border-amber-500/50'
-                          : 'bg-[#0E1724] border-white/10'
+                      className={`rounded-2xl border p-3.5 space-y-3 transition-all ${
+                        isReady
+                          ? 'bg-[#0E1724] border-emerald-500/25'
+                          : 'bg-[#17131A] border-amber-500/55'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-black text-slate-300">
-                          صف #{rIdx + 1} • المصدر: {row.sourceFileName}
-                        </span>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                              isReady
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            }`}
+                          >
+                            {isReady ? 'جاهزة للاعتماد ✓' : 'تحتاج تصحيحاً !'}
+                          </span>
+                          <span className="text-[11px] font-black text-slate-300">
+                            بطاقة #{rIdx + 1}
+                            {row.tableTitle ? ` • ${row.tableTitle}` : row.tableIndex && row.tableIndex > 1 ? ` • جدول #${row.tableIndex}` : ''}
+                          </span>
+                          {row.extractionConfidence !== undefined && (
+                            <span className="text-[10px] text-slate-400">
+                              (ثقة الاستخراج: {row.extractionConfidence}%)
+                            </span>
+                          )}
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => handleDeleteRowFromBatch(activeBatch, row.rowId)}
                           className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 hover:text-rose-300"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          حذف الصف
+                          حذف المباراة
                         </button>
                       </div>
 
-                      {/* حقول قابلة للتعديل حسب نوع البيانات */}
+                      {/* حقول المباراة أو الصف مع إبراز الحقول غير الواضحة فقط */}
                       {activeBatch.dataType === 'standings_table' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-8 gap-2">
                           <div className="col-span-2">
                             <label className="block text-[10px] text-slate-400">الفريق</label>
                             <input
                               type="text"
+                              list="wateen-teams-db"
                               value={String(row.teamName ?? '')}
+                              placeholder="اختر أو اكتب اسم الفريق"
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
                                   activeBatch,
@@ -1093,7 +1349,7 @@ export const AdminSmartImportCenter: React.FC = () => {
                                 )
                               }
                               className={`w-full rounded-lg px-2 py-1 text-xs font-extrabold border ${
-                                row.teamName === UNCLEAR_VALUE_MARKER
+                                !row.teamName
                                   ? 'bg-rose-950/60 border-rose-500 text-rose-200'
                                   : 'bg-black/60 border-white/15 text-white'
                               }`}
@@ -1109,38 +1365,49 @@ export const AdminSmartImportCenter: React.FC = () => {
                               ['goalsAgainst', 'عليه'],
                               ['points', 'النقاط'],
                             ] as const
-                          ).map(([fieldKey, labelAr]) => (
-                            <div key={fieldKey}>
-                              <label className="block text-[10px] text-slate-400">{labelAr}</label>
-                              <input
-                                type="text"
-                                value={String(row[fieldKey] ?? '')}
-                                onChange={(e) =>
-                                  handleUpdateBatchRowField(
-                                    activeBatch,
-                                    row.rowId,
-                                    fieldKey,
-                                    e.target.value
-                                  )
-                                }
-                                className={`w-full rounded-lg px-2 py-1 text-xs font-black text-center border ${
-                                  row[fieldKey] === UNCLEAR_VALUE_MARKER
-                                    ? 'bg-rose-950/60 border-rose-500 text-rose-200'
-                                    : 'bg-black/60 border-white/15 text-white'
-                                }`}
-                              />
-                            </div>
-                          ))}
+                          ).map(([fieldKey, labelAr]) => {
+                            const cellUnclear =
+                              row[fieldKey] === null ||
+                              row[fieldKey] === undefined ||
+                              row[fieldKey] === '';
+                            return (
+                              <div key={fieldKey}>
+                                <label className="block text-[10px] text-slate-400">{labelAr}</label>
+                                <input
+                                  type="text"
+                                  value={cellUnclear ? '' : String(row[fieldKey])}
+                                  placeholder="غير واضح"
+                                  onChange={(e) =>
+                                    handleUpdateBatchRowField(
+                                      activeBatch,
+                                      row.rowId,
+                                      fieldKey,
+                                      e.target.value
+                                    )
+                                  }
+                                  className={`w-full rounded-lg px-2 py-1 text-xs font-black text-center border ${
+                                    cellUnclear
+                                      ? 'bg-rose-950/60 border-rose-500 text-rose-200 placeholder:text-rose-300/70'
+                                      : 'bg-black/60 border-white/15 text-white'
+                                  }`}
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : activeBatch.dataType === 'match_results' ||
                         activeBatch.dataType === 'match_schedule' ||
                         activeBatch.dataType === 'rounds_data' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                           <div>
-                            <label className="block text-[10px] text-slate-400">المستضيف</label>
+                            <label className="block text-[10px] text-slate-400">
+                              الفريق الأول (المستضيف)
+                            </label>
                             <input
                               type="text"
+                              list="wateen-teams-db"
                               value={String(row.homeTeam ?? '')}
+                              placeholder="اختر الفريق الأول"
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
                                   activeBatch,
@@ -1149,18 +1416,23 @@ export const AdminSmartImportCenter: React.FC = () => {
                                   e.target.value
                                 )
                               }
-                              className={`w-full rounded-lg px-2 py-1 text-xs font-extrabold border ${
-                                row.homeTeam === UNCLEAR_VALUE_MARKER
-                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200'
+                              className={`w-full rounded-lg px-2 py-1.5 text-xs font-extrabold border ${
+                                isHomeTeamUnclear
+                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200 placeholder:text-rose-300/70'
                                   : 'bg-black/60 border-white/15 text-white'
                               }`}
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">أهداف المستضيف</label>
+                            <label className="block text-[10px] text-slate-400">أهداف الأول</label>
                             <input
                               type="text"
-                              value={String(row.homeScore ?? '')}
+                              value={
+                                row.homeScore === null || row.homeScore === undefined
+                                  ? ''
+                                  : String(row.homeScore)
+                              }
+                              placeholder={isHomeScoreUnclear ? 'غير واضح' : '-'}
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
                                   activeBatch,
@@ -1169,18 +1441,23 @@ export const AdminSmartImportCenter: React.FC = () => {
                                   e.target.value
                                 )
                               }
-                              className={`w-full rounded-lg px-2 py-1 text-xs font-black text-center border ${
-                                row.homeScore === UNCLEAR_VALUE_MARKER
-                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200'
+                              className={`w-full rounded-lg px-2 py-1.5 text-xs font-black text-center border ${
+                                isHomeScoreUnclear
+                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200 placeholder:text-rose-300/80'
                                   : 'bg-black/60 border-white/15 text-emerald-300'
                               }`}
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">أهداف الضيف</label>
+                            <label className="block text-[10px] text-slate-400">أهداف الثاني</label>
                             <input
                               type="text"
-                              value={String(row.awayScore ?? '')}
+                              value={
+                                row.awayScore === null || row.awayScore === undefined
+                                  ? ''
+                                  : String(row.awayScore)
+                              }
+                              placeholder={isAwayScoreUnclear ? 'غير واضح' : '-'}
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
                                   activeBatch,
@@ -1189,18 +1466,22 @@ export const AdminSmartImportCenter: React.FC = () => {
                                   e.target.value
                                 )
                               }
-                              className={`w-full rounded-lg px-2 py-1 text-xs font-black text-center border ${
-                                row.awayScore === UNCLEAR_VALUE_MARKER
-                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200'
+                              className={`w-full rounded-lg px-2 py-1.5 text-xs font-black text-center border ${
+                                isAwayScoreUnclear
+                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200 placeholder:text-rose-300/80'
                                   : 'bg-black/60 border-white/15 text-emerald-300'
                               }`}
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">الضيف</label>
+                            <label className="block text-[10px] text-slate-400">
+                              الفريق الثاني (الضيف)
+                            </label>
                             <input
                               type="text"
+                              list="wateen-teams-db"
                               value={String(row.awayTeam ?? '')}
+                              placeholder="اختر الفريق الثاني"
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
                                   activeBatch,
@@ -1209,9 +1490,9 @@ export const AdminSmartImportCenter: React.FC = () => {
                                   e.target.value
                                 )
                               }
-                              className={`w-full rounded-lg px-2 py-1 text-xs font-extrabold border ${
-                                row.awayTeam === UNCLEAR_VALUE_MARKER
-                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200'
+                              className={`w-full rounded-lg px-2 py-1.5 text-xs font-extrabold border ${
+                                isAwayTeamUnclear
+                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200 placeholder:text-rose-300/70'
                                   : 'bg-black/60 border-white/15 text-white'
                               }`}
                             />
@@ -1220,23 +1501,26 @@ export const AdminSmartImportCenter: React.FC = () => {
                             <label className="block text-[10px] text-slate-400">الجولة</label>
                             <input
                               type="text"
-                              value={String(row.round ?? '')}
+                              value={String(row.roundNumber ?? row.round ?? '')}
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
                                   activeBatch,
                                   row.rowId,
-                                  'round',
+                                  'roundNumber',
                                   e.target.value
                                 )
                               }
-                              className="w-full rounded-lg px-2 py-1 text-xs font-bold bg-black/60 border border-white/15 text-white"
+                              className="w-full rounded-lg px-2 py-1.5 text-xs font-bold bg-black/60 border border-white/15 text-white"
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">الملعب</label>
+                            <label className="block text-[10px] text-slate-400">
+                              الملعب (اختياري)
+                            </label>
                             <input
                               type="text"
                               value={String(row.stadium ?? '')}
+                              placeholder="اختياري"
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
                                   activeBatch,
@@ -1245,7 +1529,7 @@ export const AdminSmartImportCenter: React.FC = () => {
                                   e.target.value
                                 )
                               }
-                              className="w-full rounded-lg px-2 py-1 text-xs font-bold bg-black/60 border border-white/15 text-white"
+                              className="w-full rounded-lg px-2 py-1.5 text-xs font-bold bg-black/60 border border-white/15 text-white placeholder:text-slate-500"
                             />
                           </div>
                         </div>
@@ -1271,6 +1555,7 @@ export const AdminSmartImportCenter: React.FC = () => {
                             <label className="block text-[10px] text-slate-400">النادي</label>
                             <input
                               type="text"
+                              list="wateen-teams-db"
                               value={String(row.teamName ?? '')}
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
@@ -1354,6 +1639,7 @@ export const AdminSmartImportCenter: React.FC = () => {
                             <label className="block text-[10px] text-slate-400">النادي</label>
                             <input
                               type="text"
+                              list="wateen-teams-db"
                               value={String(row.teamName ?? '')}
                               onChange={(e) =>
                                 handleUpdateBatchRowField(
@@ -1423,10 +1709,14 @@ export const AdminSmartImportCenter: React.FC = () => {
                           {row.issues.map((iss, iIdx) => (
                             <div
                               key={iIdx}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/50 border border-amber-500/35 px-2.5 py-1.5 text-[11px]"
+                              className={`flex flex-wrap items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-[11px] border ${
+                                iss.blocking
+                                  ? 'bg-rose-950/40 border-rose-500/45 text-rose-200'
+                                  : 'bg-black/50 border-amber-500/35 text-amber-200'
+                              }`}
                             >
-                              <span className="flex items-center gap-1.5 text-amber-200 font-bold">
-                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span className="flex items-center gap-1.5 font-bold">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                                 {iss.message}
                               </span>
 
@@ -1439,7 +1729,9 @@ export const AdminSmartImportCenter: React.FC = () => {
                                         handleLinkUnknownTeam(
                                           activeBatch,
                                           row.rowId,
-                                          String(row[iss.field as keyof SmartImportExtractedRow] || ''),
+                                          String(
+                                            row[iss.field as keyof SmartImportExtractedRow] || ''
+                                          ),
                                           iss.suggestedTeamName!
                                         )
                                       }
@@ -1454,13 +1746,15 @@ export const AdminSmartImportCenter: React.FC = () => {
                                     onClick={() =>
                                       handleCreateNewTeamFromReview(
                                         activeBatch,
-                                        String(row[iss.field as keyof SmartImportExtractedRow] || '')
+                                        String(
+                                          row[iss.field as keyof SmartImportExtractedRow] || ''
+                                        )
                                       )
                                     }
                                     className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[10px] font-black"
                                   >
                                     <UserPlus className="w-3 h-3" />
-                                    إنشاء فريق جديد
+                                    اعتماد كفريق جديد
                                   </button>
                                 </div>
                               )}
@@ -1473,7 +1767,7 @@ export const AdminSmartImportCenter: React.FC = () => {
                 })}
               </div>
 
-              {/* شريط أزرار القرار النهائي (حفظ كمسودة / اعتماد ونشر / رفض الاستيراد) */}
+              {/* شريط أزرار القرار النهائي */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold text-slate-400">اسم المعتمد:</span>
@@ -1519,11 +1813,12 @@ export const AdminSmartImportCenter: React.FC = () => {
 
                   <button
                     type="button"
+                    disabled={readyForReviewCount === 0}
                     onClick={() => approveAndPublishImportBatch(activeBatch.id, actorName)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-l from-[#00E640] to-emerald-500 hover:from-[#2bff65] hover:to-emerald-400 text-black text-xs font-black shadow-[0_0_20px_rgba(0,255,64,0.35)]"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-l from-[#00E640] to-emerald-500 hover:from-[#2bff65] hover:to-emerald-400 text-black text-xs font-black shadow-[0_0_20px_rgba(0,255,64,0.35)] disabled:opacity-40"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    اعتماد البيانات ونشرها رسمياً
+                    اعتماد المباريات الصحيحة ({readyForReviewCount})
                   </button>
                 </div>
               </div>

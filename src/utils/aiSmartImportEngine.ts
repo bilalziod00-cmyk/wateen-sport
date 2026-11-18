@@ -1,9 +1,9 @@
 import {
   CompetitionId,
   CompetitionRuleConfig,
+  ImportDiagnosticLog,
   ImportedRowIssue,
   ImportSourceFileMeta,
-  ImportSourceFormat,
   MatchItem,
   MatchStatus,
   SmartImportBatch,
@@ -19,16 +19,21 @@ import {
   UNCLEAR_VALUE_MARKER,
 } from './sportsMathEngine';
 import {
+  COMPETITIONS,
   getDefaultCompetitionRules,
   INITIAL_JORDAN_TEAMS_DIRECTORY,
 } from '../constants/competitions';
 
-// تحويل الأرقام العربية المشرقية (٠-٩) إلى أرقام قياسية (0-9)
+/**
+ * تحويل الأرقام العربية/الهندية (٠-٩) والفارسية (۰-۹) إلى أرقام قياسية (0-9)
+ */
 export function normalizeDigits(str: string): string {
-  return (str || '').replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  return (str || '')
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
 }
 
-function isValueUnclear(val: unknown): boolean {
+export function isValueUnclearOrMissing(val: unknown): boolean {
   if (val === null || val === undefined) return true;
   const s = normalizeDigits(String(val)).trim();
   if (!s) return true;
@@ -39,8 +44,11 @@ function isValueUnclear(val: unknown): boolean {
     s === '?' ||
     s === '؟؟' ||
     s === '??' ||
+    s === '-' ||
+    s === '—' ||
     s.toLowerCase() === 'unclear' ||
     s.toLowerCase() === 'null' ||
+    s.toLowerCase() === 'undefined' ||
     s.toLowerCase() === 'nan'
   ) {
     return true;
@@ -48,19 +56,30 @@ function isValueUnclear(val: unknown): boolean {
   return false;
 }
 
-function parseNumOrUnclear(val: unknown): number | string {
-  if (isValueUnclear(val)) return UNCLEAR_VALUE_MARKER;
+/**
+ * تحويل قيمة رقمية بأمان: إذا كانت غير واضحة أو ناقصة تُرجع null بدلاً من اختراع قيمة
+ */
+export function parseScoreOrNull(val: unknown): number | null {
+  if (isValueUnclearOrMissing(val)) return null;
   const s = normalizeDigits(String(val)).trim();
+  if (!/^\d+$/.test(s)) return null;
   const n = Number(s);
-  if (!Number.isFinite(n) || n < 0 || !/^\d+$/.test(s)) {
-    return UNCLEAR_VALUE_MARKER;
-  }
+  if (!Number.isFinite(n) || n < 0) return null;
   return n;
+}
+
+function cleanTeamNameToken(raw: string): string {
+  return (raw || '')
+    .replace(/^(فاز|فوز|تغلب|انتصر|انتصار|تعادل|خسر|خسارة|مباراة|لقاء|تأجيل|ملغاة|نتيجة|نادي|فريق)\s+/g, '')
+    .replace(/^(على|أمام|امام|مع|ضد|و)\s+/g, '')
+    .replace(/\s+(على|أمام|امام|مع|ضد|بنتيجة|بهدفين|بهدف|بثلاثية)$/g, '')
+    .replace(/^[(\[\s"'«»]+|[)\]\s"'«»]+$/g, '')
+    .trim();
 }
 
 /**
  * طبقة التحقق البرمجية المستقلة عن الذكاء الاصطناعي:
- * تفحص كل صف مستخرج، وتتحقق من الأسماء، التكرار، التعارض الحسابي، والقيم غير الواضحة
+ * تبني المخطط الموحد للمباراة (Unified Match Schema) وتحدد الجاهزية للاعتماد لكل صف على حدة
  */
 export function validateExtractedImportRows(
   rawRows: Partial<SmartImportExtractedRow>[],
@@ -69,94 +88,269 @@ export function validateExtractedImportRows(
   existingMatches: MatchItem[] = [],
   existingStandings: StandingRow[] = [],
   directory: TeamDirectoryItem[] = INITIAL_JORDAN_TEAMS_DIRECTORY,
-  rule?: CompetitionRuleConfig
+  rule?: CompetitionRuleConfig,
+  contextMeta?: {
+    season?: string;
+    ageCategory?: string;
+    groupName?: string;
+    roundName?: string;
+  }
 ): SmartImportExtractedRow[] {
   const activeRule =
     rule ||
     getDefaultCompetitionRules()[competitionId] ||
     getDefaultCompetitionRules().pro_league;
 
+  const compMeta = COMPETITIONS[competitionId] || COMPETITIONS.pro_league;
+  const defaultSeason = contextMeta?.season || activeRule.season || compMeta.season;
+  const defaultAge = contextMeta?.ageCategory || activeRule.ageCategory || compMeta.ageCategory;
+  const defaultGroup = contextMeta?.groupName || activeRule.groups?.[0] || compMeta.defaultGroups[0] || 'الدوري العام';
+  const defaultRound = contextMeta?.roundName || 'الجولة 1';
+
   const seenInBatch = new Set<string>();
 
   return rawRows.map((raw, idx) => {
     const issues: ImportedRowIssue[] = [];
+    const validationWarnings: string[] = [];
     const unknownTeams: string[] = [];
     let isUnclear = false;
     let isDuplicate = false;
     let hasConflict = false;
+    let confidence = typeof raw.extractionConfidence === 'number' ? raw.extractionConfidence : 95;
+
+    const roundVal = String(raw.roundNumber || raw.round || defaultRound).trim() || defaultRound;
+    const stadiumVal = String(raw.stadium ?? '').trim();
+    const dateVal = String(raw.matchDate ?? '').trim();
+    const timeVal = String(raw.matchTime || raw.kickoffTime || '').trim();
+    const statusVal: MatchStatus = (raw.matchStatus || raw.status || (dataType === 'match_schedule' ? 'upcoming' : 'finished')) as MatchStatus;
 
     const row: SmartImportExtractedRow = {
       rowId: raw.rowId || `row-${Date.now()}-${idx}`,
       sourceFileName: raw.sourceFileName || 'مصدر مباشر',
-      ...raw,
+      tableIndex: raw.tableIndex ?? 1,
+      tableTitle: raw.tableTitle,
+      competitionName: raw.competitionName || compMeta.name,
+      season: raw.season || defaultSeason,
+      ageCategory: raw.ageCategory || defaultAge,
+      groupName: raw.groupName || defaultGroup,
+      roundNumber: roundVal,
+      round: roundVal,
+      matchDate: dateVal,
+      matchTime: timeVal,
+      kickoffTime: timeVal,
+      stadium: stadiumVal,
+      homeTeam: raw.homeTeam !== undefined ? String(raw.homeTeam || '').trim() : undefined,
+      awayTeam: raw.awayTeam !== undefined ? String(raw.awayTeam || '').trim() : undefined,
+      homeScore: raw.homeScore,
+      awayScore: raw.awayScore,
+      matchStatus: statusVal,
+      status: statusVal,
+      sourceReference: raw.sourceReference || `${raw.sourceFileName || 'مصدر مباشر'} #${idx + 1}`,
+      extractionConfidence: confidence,
+      validationWarnings: [],
+      teamName: raw.teamName !== undefined ? String(raw.teamName || '').trim() : undefined,
+      played: raw.played,
+      won: raw.won,
+      drawn: raw.drawn,
+      lost: raw.lost,
+      goalsFor: raw.goalsFor,
+      goalsAgainst: raw.goalsAgainst,
+      points: raw.points,
+      playerName: raw.playerName,
+      playerPosition: raw.playerPosition,
+      goals: raw.goals,
+      assists: raw.assists,
+      matches: raw.matches,
+      cleanSheets: raw.cleanSheets,
+      goalsConceded: raw.goalsConceded,
+      city: raw.city,
       isUnclear: false,
       isDuplicate: false,
       hasConflict: false,
+      isReadyForApproval: true,
       unknownTeams: [],
       issues: [],
     };
 
-    const checkTeamField = (fieldKey: 'teamName' | 'homeTeam' | 'awayTeam', labelAr: string) => {
-      const val = String(row[fieldKey] || '').trim();
-      if (!val || isValueUnclear(val)) {
-        row[fieldKey] = UNCLEAR_VALUE_MARKER;
+    const inspectTeam = (fieldKey: 'teamName' | 'homeTeam' | 'awayTeam', labelAr: string) => {
+      const rawVal = String(row[fieldKey] || '').trim();
+      if (!rawVal || isValueUnclearOrMissing(rawVal)) {
+        row[fieldKey] = '';
         isUnclear = true;
+        confidence = Math.min(confidence, 35);
+        const msg = `${labelAr} غير موجود أو غير واضح في المصدر`;
+        validationWarnings.push(msg);
         issues.push({
           field: fieldKey,
           type: 'unclear',
-          message: `${labelAr} غير واضح أو مفقود في المصدر`,
+          blocking: true,
+          message: msg,
         });
         return;
       }
 
-      const resolved = resolveTeamFromDirectory(val, competitionId, directory, existingStandings);
+      const resolved = resolveTeamFromDirectory(rawVal, competitionId, directory, existingStandings);
       if (resolved.status === 'matched') {
         row[fieldKey] = resolved.canonicalName;
       } else if (resolved.status === 'similar') {
-        unknownTeams.push(val);
+        unknownTeams.push(rawVal);
+        confidence = Math.min(confidence, 78);
+        const msg = `اسم مشابه لفريق مسجل: "${rawVal}" — هل تقصد "${resolved.suggestedTeamName}"؟`;
+        validationWarnings.push(msg);
         issues.push({
           field: fieldKey,
           type: 'unknown_team',
-          message: `اسم مشابه لفريق مسجل: "${val}" — هل تقصد "${resolved.suggestedTeamName}"؟`,
+          blocking: false,
+          message: msg,
           suggestedTeamName: resolved.suggestedTeamName,
         });
       } else {
-        unknownTeams.push(val);
+        unknownTeams.push(rawVal);
+        confidence = Math.min(confidence, 82);
+        const msg = `الفريق "${rawVal}" غير موجود في قاعدة البيانات (يمكن ربطه أو اعتماده كفريق جديد)`;
+        validationWarnings.push(msg);
         issues.push({
           field: fieldKey,
           type: 'unknown_team',
-          message: `الفريق "${val}" غير مسجل في دليل البطولة (يمكنك ربطه أو إنشاؤه كفريق جديد)`,
+          blocking: false,
+          message: msg,
         });
       }
     };
 
-    // 1) التحقق حسب نوع البيانات المستوردة
-    if (dataType === 'standings_table') {
-      checkTeamField('teamName', 'اسم الفريق');
-      row.played = parseNumOrUnclear(row.played);
-      row.won = parseNumOrUnclear(row.won);
-      row.drawn = parseNumOrUnclear(row.drawn);
-      row.lost = parseNumOrUnclear(row.lost);
-      row.goalsFor = parseNumOrUnclear(row.goalsFor);
-      row.goalsAgainst = parseNumOrUnclear(row.goalsAgainst);
-      row.points = parseNumOrUnclear(row.points);
+    // 1) التحقق من المباريات والنتائج والجولات
+    if (
+      dataType === 'match_results' ||
+      dataType === 'match_schedule' ||
+      dataType === 'rounds_data'
+    ) {
+      inspectTeam('homeTeam', 'الفريق المستضيف');
+      inspectTeam('awayTeam', 'الفريق الضيف');
 
-      const numFields: (keyof SmartImportExtractedRow)[] = [
+      if (
+        row.homeTeam &&
+        row.awayTeam &&
+        normalizeArabicTeamName(row.homeTeam) === normalizeArabicTeamName(row.awayTeam)
+      ) {
+        hasConflict = true;
+        confidence = Math.min(confidence, 20);
+        const msg = 'تعارض: لا يمكن أن يكون الفريق المستضيف والضيف نفس الفريق';
+        validationWarnings.push(msg);
+        issues.push({
+          field: 'awayTeam',
+          type: 'conflict',
+          blocking: true,
+          message: msg,
+        });
+      }
+
+      // الملعب والتاريخ حقول اختيارية: غيابها لا يفشل استخراج المباراة ولا يمنع اعتمادها
+      if (!row.stadium) {
+        validationWarnings.push('اسم الملعب غير مذكور في المصدر (حقل اختياري)');
+      }
+
+      const requiresScore =
+        row.matchStatus === 'finished' ||
+        (dataType === 'match_results' && row.matchStatus !== 'upcoming' && row.matchStatus !== 'postponed' && row.matchStatus !== 'cancelled');
+
+      const parsedHome = parseScoreOrNull(row.homeScore);
+      const parsedAway = parseScoreOrNull(row.awayScore);
+
+      if (requiresScore) {
+        row.matchStatus = 'finished';
+        row.status = 'finished';
+        row.homeScore = parsedHome;
+        row.awayScore = parsedAway;
+
+        if (parsedHome === null || parsedAway === null) {
+          isUnclear = true;
+          confidence = Math.min(confidence, 40);
+          const msg = 'نتيجة المباراة غير واضحة في المصدر وتحتاج تحديد الأهداف قبل الاعتماد';
+          validationWarnings.push(msg);
+          issues.push({
+            field: parsedHome === null ? 'homeScore' : 'awayScore',
+            type: 'unclear',
+            blocking: true,
+            message: msg,
+          });
+        }
+      } else {
+        row.homeScore = parsedHome;
+        row.awayScore = parsedAway;
+      }
+
+      // فحص التكرار
+      if (row.homeTeam && row.awayTeam) {
+        const batchKey = `${normalizeArabicTeamName(row.homeTeam)}__${normalizeArabicTeamName(
+          row.awayTeam
+        )}__${normalizeArabicTeamName(row.roundNumber || '')}`;
+
+        if (seenInBatch.has(batchKey)) {
+          isDuplicate = true;
+          confidence = Math.min(confidence, 30);
+          const msg = 'مباراة مكررة داخل نفس المصدر المستورد';
+          validationWarnings.push(msg);
+          issues.push({
+            field: 'homeTeam',
+            type: 'duplicate',
+            blocking: true,
+            message: msg,
+          });
+        }
+        seenInBatch.add(batchKey);
+
+        const dupExisting = isDuplicateMatchItem(
+          {
+            competitionId,
+            round: row.roundNumber,
+            homeTeam: row.homeTeam,
+            awayTeam: row.awayTeam,
+          },
+          existingMatches
+        );
+        if (dupExisting) {
+          isDuplicate = true;
+          confidence = Math.min(confidence, 30);
+          const msg = `مباراة مكررة: مسجلة مسبقاً في (${dupExisting.round}) بنتيجة (${dupExisting.homeScore}-${dupExisting.awayScore})`;
+          validationWarnings.push(msg);
+          issues.push({
+            field: 'homeTeam',
+            type: 'duplicate',
+            blocking: true,
+            message: msg,
+          });
+        }
+      }
+    }
+    // 2) التحقق من جدول الترتيب
+    else if (dataType === 'standings_table') {
+      inspectTeam('teamName', 'اسم الفريق');
+      row.played = parseScoreOrNull(row.played);
+      row.won = parseScoreOrNull(row.won);
+      row.drawn = parseScoreOrNull(row.drawn);
+      row.lost = parseScoreOrNull(row.lost);
+      row.goalsFor = parseScoreOrNull(row.goalsFor ?? 0);
+      row.goalsAgainst = parseScoreOrNull(row.goalsAgainst ?? 0);
+      row.points = parseScoreOrNull(row.points);
+
+      const essentialFields: (keyof SmartImportExtractedRow)[] = [
         'played',
         'won',
         'drawn',
         'lost',
-        'goalsFor',
-        'goalsAgainst',
         'points',
       ];
-      for (const nf of numFields) {
-        if (row[nf] === UNCLEAR_VALUE_MARKER) {
+      for (const ef of essentialFields) {
+        if (row[ef] === null) {
           isUnclear = true;
+          confidence = Math.min(confidence, 45);
+          const msg = `قيمة الحقل (${ef}) غير واضحة في جدول الترتيب`;
+          validationWarnings.push(msg);
           issues.push({
-            field: nf,
+            field: ef,
             type: 'unclear',
-            message: `قيمة الحقل (${nf}) غير واضحة في المصدر`,
+            blocking: true,
+            message: msg,
           });
         }
       }
@@ -168,200 +362,90 @@ export function validateExtractedImportRows(
         typeof row.lost === 'number'
       ) {
         if (row.played !== row.won + row.drawn + row.lost) {
-          hasConflict = true;
+          const msg = `تنبيه حسابي: لعب (${row.played}) يختلف عن مجموع (فوز ${row.won} + تعادل ${row.drawn} + خسارة ${row.lost})`;
+          validationWarnings.push(msg);
           issues.push({
             field: 'played',
-            type: 'conflict',
-            message: `تعارض حسابي: عدد المباريات (${row.played}) لا يساوي مجموع (فوز ${row.won} + تعادل ${row.drawn} + خسارة ${row.lost})`,
-          });
-        }
-        const expectedPts =
-          row.won * activeRule.pointsWin +
-          row.drawn * activeRule.pointsDraw +
-          row.lost * activeRule.pointsLoss;
-        if (typeof row.points === 'number' && row.points !== expectedPts) {
-          hasConflict = true;
-          issues.push({
-            field: 'points',
-            type: 'conflict',
-            message: `تعارض في النقاط: النقاط المسجلة (${row.points}) تختلف عن النقاط المحسوبة حسب لائحة البطولة (${expectedPts})`,
+            type: 'warning',
+            blocking: false,
+            message: msg,
           });
         }
       }
 
-      const teamKey = normalizeArabicTeamName(String(row.teamName || ''));
-      if (teamKey && teamKey !== normalizeArabicTeamName(UNCLEAR_VALUE_MARKER)) {
-        if (seenInBatch.has(`st:${teamKey}`)) {
+      if (row.teamName) {
+        const key = `st:${normalizeArabicTeamName(row.teamName)}:${row.tableIndex || 1}`;
+        if (seenInBatch.has(key)) {
           isDuplicate = true;
+          const msg = `الفريق "${row.teamName}" مكرر في نفس الجدول`;
+          validationWarnings.push(msg);
           issues.push({
             field: 'teamName',
             type: 'duplicate',
-            message: `الفريق "${row.teamName}" مكرر مرتين في نفس جدول الاستيراد`,
+            blocking: true,
+            message: msg,
           });
         }
-        seenInBatch.add(`st:${teamKey}`);
+        seenInBatch.add(key);
       }
-    } else if (
-      dataType === 'match_results' ||
-      dataType === 'match_schedule' ||
-      dataType === 'rounds_data'
+    }
+    // 3) التحقق من الهدافين واللاعبين والحراس والفرق
+    else if (
+      dataType === 'top_scorers' ||
+      dataType === 'players_stats' ||
+      dataType === 'players_list'
     ) {
-      checkTeamField('homeTeam', 'الفريق المستضيف');
-      checkTeamField('awayTeam', 'الفريق الضيف');
-
-      if (
-        row.homeTeam &&
-        row.awayTeam &&
-        row.homeTeam !== UNCLEAR_VALUE_MARKER &&
-        normalizeArabicTeamName(row.homeTeam) === normalizeArabicTeamName(row.awayTeam)
-      ) {
-        hasConflict = true;
-        issues.push({
-          field: 'awayTeam',
-          type: 'conflict',
-          message: 'تعارض: لا يمكن أن يكون الفريق المستضيف والضيف نفس الفريق',
-        });
-      }
-
-      const isResultRow =
-        dataType === 'match_results' ||
-        row.status === 'finished' ||
-        (row.homeScore !== undefined && row.homeScore !== '' && row.status !== 'upcoming');
-
-      if (isResultRow) {
-        row.status = row.status || 'finished';
-        row.homeScore = parseNumOrUnclear(row.homeScore);
-        row.awayScore = parseNumOrUnclear(row.awayScore);
-        if (row.homeScore === UNCLEAR_VALUE_MARKER || row.awayScore === UNCLEAR_VALUE_MARKER) {
-          isUnclear = true;
-          issues.push({
-            field: 'homeScore',
-            type: 'unclear',
-            message: 'نتيجة المباراة غير واضحة وتحتاج تأكيد المدير قبل الاعتماد',
-          });
-        }
-      } else {
-        row.status = row.status || 'upcoming';
-        row.homeScore = typeof row.homeScore === 'number' ? row.homeScore : 0;
-        row.awayScore = typeof row.awayScore === 'number' ? row.awayScore : 0;
-      }
-
-      // فحص التكرار مع المباريات المسجلة أو داخل نفس الدفعة
-      const batchMatchKey = `${normalizeArabicTeamName(row.homeTeam || '')}__${normalizeArabicTeamName(
-        row.awayTeam || ''
-      )}__${(row.round || '').trim()}`;
-
-      if (
-        row.homeTeam &&
-        row.awayTeam &&
-        row.homeTeam !== UNCLEAR_VALUE_MARKER &&
-        row.awayTeam !== UNCLEAR_VALUE_MARKER
-      ) {
-        if (seenInBatch.has(batchMatchKey)) {
-          isDuplicate = true;
-          issues.push({
-            field: 'homeTeam',
-            type: 'duplicate',
-            message: 'مباراة مكررة داخل نفس عملية الاستيراد',
-          });
-        }
-        seenInBatch.add(batchMatchKey);
-
-        const dupExisting = isDuplicateMatchItem(
-          {
-            competitionId,
-            round: row.round,
-            homeTeam: row.homeTeam,
-            awayTeam: row.awayTeam,
-          },
-          existingMatches
-        );
-        if (dupExisting) {
-          isDuplicate = true;
-          issues.push({
-            field: 'homeTeam',
-            type: 'duplicate',
-            message: `هذه المباراة مسجلة مسبقاً في (${dupExisting.round}) بنتيجة (${dupExisting.homeScore}-${dupExisting.awayScore})`,
-          });
-        }
-      }
-    } else if (dataType === 'top_scorers' || dataType === 'players_stats' || dataType === 'players_list') {
-      if (!row.playerName || isValueUnclear(row.playerName)) {
-        row.playerName = UNCLEAR_VALUE_MARKER;
+      const pName = String(row.playerName || '').trim();
+      if (!pName || isValueUnclearOrMissing(pName)) {
+        row.playerName = '';
         isUnclear = true;
         issues.push({
           field: 'playerName',
           type: 'unclear',
+          blocking: true,
           message: 'اسم اللاعب غير واضح في المصدر',
         });
       }
-      checkTeamField('teamName', 'نادي اللاعب');
-      if (dataType !== 'players_list') {
-        row.goals = parseNumOrUnclear(row.goals ?? 0);
-        row.assists = parseNumOrUnclear(row.assists ?? 0);
-        row.matches = parseNumOrUnclear(row.matches ?? 1);
-        if (row.goals === UNCLEAR_VALUE_MARKER) {
-          isUnclear = true;
-          issues.push({
-            field: 'goals',
-            type: 'unclear',
-            message: 'عدد أهداف اللاعب غير واضح',
-          });
-        }
-      }
+      inspectTeam('teamName', 'نادي اللاعب');
+      row.goals = parseScoreOrNull(row.goals ?? 0) ?? 0;
+      row.assists = parseScoreOrNull(row.assists ?? 0) ?? 0;
+      row.matches = parseScoreOrNull(row.matches ?? 1) ?? 1;
     } else if (dataType === 'goalkeepers_stats') {
-      if (!row.playerName || isValueUnclear(row.playerName)) {
-        row.playerName = UNCLEAR_VALUE_MARKER;
+      const pName = String(row.playerName || '').trim();
+      if (!pName || isValueUnclearOrMissing(pName)) {
+        row.playerName = '';
         isUnclear = true;
         issues.push({
           field: 'playerName',
           type: 'unclear',
+          blocking: true,
           message: 'اسم حارس المرمى غير واضح',
         });
       }
-      checkTeamField('teamName', 'نادي الحارس');
-      row.matches = parseNumOrUnclear(row.matches ?? 1);
-      row.cleanSheets = parseNumOrUnclear(row.cleanSheets ?? 0);
-      row.goalsConceded = parseNumOrUnclear(row.goalsConceded ?? 0);
-      if (
-        row.cleanSheets === UNCLEAR_VALUE_MARKER ||
-        row.goalsConceded === UNCLEAR_VALUE_MARKER
-      ) {
+      inspectTeam('teamName', 'نادي الحارس');
+      row.matches = parseScoreOrNull(row.matches ?? 1) ?? 1;
+      row.cleanSheets = parseScoreOrNull(row.cleanSheets);
+      row.goalsConceded = parseScoreOrNull(row.goalsConceded ?? 0) ?? 0;
+      if (row.cleanSheets === null) {
         isUnclear = true;
         issues.push({
           field: 'cleanSheets',
           type: 'unclear',
-          message: 'أرقام الشباك النظيفة أو الأهداف المستقبلة غير واضحة',
-        });
-      }
-      if (
-        typeof row.matches === 'number' &&
-        typeof row.cleanSheets === 'number' &&
-        row.cleanSheets > row.matches
-      ) {
-        hasConflict = true;
-        issues.push({
-          field: 'cleanSheets',
-          type: 'conflict',
-          message: `تعارض: الشباك النظيفة (${row.cleanSheets}) أكبر من عدد المباريات (${row.matches})`,
+          blocking: true,
+          message: 'عدد الشباك النظيفة غير واضح',
         });
       }
     } else if (dataType === 'teams_list') {
-      const val = String(row.teamName || '').trim();
-      if (!val || isValueUnclear(val)) {
-        row.teamName = UNCLEAR_VALUE_MARKER;
-        isUnclear = true;
-        issues.push({
-          field: 'teamName',
-          type: 'unclear',
-          message: 'اسم الفريق غير واضح',
-        });
-      }
+      inspectTeam('teamName', 'اسم الفريق');
     }
 
+    const hasBlockingIssue = issues.some((i) => i.blocking);
     row.isUnclear = isUnclear;
     row.isDuplicate = isDuplicate;
     row.hasConflict = hasConflict;
+    row.isReadyForApproval = !hasBlockingIssue;
+    row.extractionConfidence = confidence;
+    row.validationWarnings = validationWarnings;
     row.unknownTeams = unknownTeams;
     row.issues = issues;
     return row;
@@ -369,7 +453,335 @@ export function validateExtractedImportRows(
 }
 
 /**
- * تحليل النصوص الرياضية العربية المنسوخة أو المستخرجة من الجداول (بدون اختراع أي بيانات)
+ * استخراج مباراة واحدة من جملة أو سطر عربي بجميع الصيغ الممكنة:
+ * - "الكرمل 2 - 1 عجلون" / "الكرمل ٢ : ١ عجلون"
+ * - "الكرمل (2) عجلون (1)" / "الكرمل (2) - (1) عجلون" / "الكرمل [2] عجلون [1]"
+ * - "الكرمل 2 عجلون 1"
+ * - "فاز الكرمل على عجلون 2-1" / "تغلب الكرمل على عجلون بنتيجة 2-1" / "تعادل الكرمل وعجلون 1-1"
+ * - "الكرمل × عجلون (2-1)" / "الكرمل ضد عجلون"
+ */
+function stripOuterWrappingParens(s: string): string {
+  const t = (s || '').trim();
+  if (t.startsWith('(') && t.endsWith(')') && !/\)\s*[\u0600-\u06FFa-zA-Z]/.test(t.slice(1, -1))) {
+    return t.slice(1, -1).trim();
+  }
+  return t.replace(/^[•*#-\s]+/, '').trim();
+}
+
+function parseMatchClause(
+  clauseRaw: string,
+  context: {
+    round: string;
+    stadium: string;
+    matchDate: string;
+    matchTime: string;
+    tableIndex: number;
+    tableTitle?: string;
+    sourceFileName: string;
+    defaultStatus: MatchStatus;
+  }
+): Partial<SmartImportExtractedRow> | null {
+  let clause = stripOuterWrappingParens(normalizeDigits(clauseRaw));
+  if (clause.length < 4) return null;
+
+  let round = context.round;
+  let stadium = context.stadium;
+  let matchDate = context.matchDate;
+  let matchTime = context.matchTime;
+  let status: MatchStatus | undefined;
+
+  if (/مؤجل|تأجيل/.test(clause)) status = 'postponed';
+  else if (/ملغ|إلغاء/.test(clause)) status = 'cancelled';
+
+  // فصل الملحقات المفصولة بـ | أو - في آخر الجملة (مثل الملعب، الجولة، التاريخ، الوقت)
+  const pipeSegments = clause
+    .split(/\s*\|\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let coreText = pipeSegments[0] || clause;
+  for (const seg of pipeSegments.slice(1)) {
+    if (/^(الجولة|جولة|الأسبوع|اسبوع)\s+[\u0600-\u06FF0-9]+/i.test(seg)) {
+      round = seg;
+    } else if (/ستاد|ملعب|مدينة|صالة/.test(seg)) {
+      stadium = seg;
+    } else if (/\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/.test(seg)) {
+      const dm = seg.match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/);
+      if (dm) matchDate = dm[0];
+      const tm = seg.match(/\b\d{1,2}:\d{2}\b/);
+      if (tm) matchTime = tm[0];
+    } else if (/^\d{1,2}:\d{2}(\s*(ص|م|AM|PM))?$/i.test(seg) || /الساعة/.test(seg)) {
+      matchTime = seg.replace(/الساعة\s*/, '').trim();
+    }
+  }
+
+  // استخراج الملعب أو التاريخ إن كان مكتوباً داخل الجملة نفسها مثل "على ستاد الحسن" أو "في ملعب البترا"
+  const inlineStadiumMatch = coreText.match(
+    /\s+(?:على|في|بملعب)\s+((?:ستاد|ملعب|مدينة)\s+[\u0600-\u06FF\s-]+)$/
+  );
+  if (inlineStadiumMatch) {
+    if (!stadium) stadium = inlineStadiumMatch[1].trim();
+    coreText = coreText.slice(0, inlineStadiumMatch.index).trim();
+  }
+
+  // إزالة رقم الترتيب في بداية السطر مثل "1)" أو "1-" أو "1." فقط إذا تلاه حرف عربي
+  coreText = coreText.replace(/^\d{1,2}\s*[.)\-]\s*(?=[\u0600-\u06FF])/, '').trim();
+
+  // الصيغة (1): الكرمل (2) عجلون (1) أو الكرمل (2) - عجلون (1) أو الكرمل [2] عجلون [1]
+  const eachParenMatch = coreText.match(
+    /^(.+?)\s*[([]\s*(\d+|غير واضح|\?+|؟؟)\s*[)\]]\s*(?:[-–:×xXضدvsVSو]|\s)\s*(.+?)\s*[([]\s*(\d+|غير واضح|\?+|؟؟)\s*[)\]]$/
+  );
+  if (eachParenMatch) {
+    const homeTeam = cleanTeamNameToken(eachParenMatch[1]);
+    const hs = parseScoreOrNull(eachParenMatch[2]);
+    const awayTeam = cleanTeamNameToken(eachParenMatch[3]);
+    const as = parseScoreOrNull(eachParenMatch[4]);
+    if (homeTeam && awayTeam) {
+      return {
+        sourceFileName: context.sourceFileName,
+        tableIndex: context.tableIndex,
+        tableTitle: context.tableTitle,
+        homeTeam,
+        awayTeam,
+        homeScore: hs,
+        awayScore: as,
+        roundNumber: round,
+        round,
+        stadium,
+        matchDate,
+        matchTime,
+        matchStatus: status || 'finished',
+        status: status || 'finished',
+        extractionConfidence: hs !== null && as !== null ? 96 : 55,
+      };
+    }
+  }
+
+  // الصيغة (2): الكرمل (2) - (1) عجلون
+  const midParenScoreMatch = coreText.match(
+    /^(.+?)\s*[([]\s*(\d+|غير واضح|\?+|؟؟)\s*[)\]]\s*[-–:×xX]?\s*[([]\s*(\d+|غير واضح|\?+|؟؟)\s*[)\]]\s*(.+)$/
+  );
+  if (midParenScoreMatch) {
+    const homeTeam = cleanTeamNameToken(midParenScoreMatch[1]);
+    const hs = parseScoreOrNull(midParenScoreMatch[2]);
+    const as = parseScoreOrNull(midParenScoreMatch[3]);
+    const awayTeam = cleanTeamNameToken(midParenScoreMatch[4]);
+    if (homeTeam && awayTeam) {
+      return {
+        sourceFileName: context.sourceFileName,
+        tableIndex: context.tableIndex,
+        tableTitle: context.tableTitle,
+        homeTeam,
+        awayTeam,
+        homeScore: hs,
+        awayScore: as,
+        roundNumber: round,
+        round,
+        stadium,
+        matchDate,
+        matchTime,
+        matchStatus: status || 'finished',
+        status: status || 'finished',
+        extractionConfidence: hs !== null && as !== null ? 96 : 55,
+      };
+    }
+  }
+
+  // الصيغة (3): صيغة خبرية عربية: "فاز الكرمل على عجلون 2-1" أو "شهدت الجولة فوز الكرمل على عجلون 2-1" أو "وتغلب الحسين إربد على الوحدات بنتيجة (3-0)" أو "وتعادل الفيصلي والرمثا 1-1"
+  const narrativeMatch = coreText.match(
+    /(?:^|.*?\s)(و?(?:فاز|فوز|تغلب|انتصر|انتصار|تعادل|خسر|خسارة))\s+(.+?)\s+(?:(?:على|أمام|امام|مع|ضد|و)\s+|و(?=ال))(.+?)\s+(?:بنتيجة\s*)?[([]?\s*(\d+|غير واضح|\?+|؟؟)\s*[-–:/]\s*(\d+|غير واضح|\?+|؟؟)\s*[)\]]?$/
+  );
+  if (narrativeMatch) {
+    const verb = narrativeMatch[1];
+    const isLossVerb = /^و?(?:خسر|خسارة)/.test(verb);
+    const homeTeam = cleanTeamNameToken(narrativeMatch[2]);
+    const awayTeam = cleanTeamNameToken(narrativeMatch[3]);
+    const s1 = parseScoreOrNull(narrativeMatch[4]);
+    const s2 = parseScoreOrNull(narrativeMatch[5]);
+    const hs = isLossVerb && s1 !== null && s2 !== null && s1 > s2 ? s2 : s1;
+    const as = isLossVerb && s1 !== null && s2 !== null && s1 > s2 ? s1 : s2;
+    if (homeTeam && awayTeam) {
+      return {
+        sourceFileName: context.sourceFileName,
+        tableIndex: context.tableIndex,
+        tableTitle: context.tableTitle,
+        homeTeam,
+        awayTeam,
+        homeScore: hs,
+        awayScore: as,
+        roundNumber: round,
+        round,
+        stadium,
+        matchDate,
+        matchTime,
+        matchStatus: status || 'finished',
+        status: status || 'finished',
+        extractionConfidence: hs !== null && as !== null ? 94 : 50,
+      };
+    }
+  }
+
+  // الصيغة (4): النتيجة في المنتصف: "الكرمل 2 - 1 عجلون" أو "السلط غير واضح - 1 شباب الأردن" أو "الكرمل ? - ? عجلون"
+  const midScoreMatch = coreText.match(
+    /^(.+?)\s+(\d+|غير واضح|\?+|؟؟)\s*[-–:/×xX]\s*(\d+|غير واضح|\?+|؟؟)\s+(.+)$/
+  );
+  if (midScoreMatch) {
+    const homeTeam = cleanTeamNameToken(midScoreMatch[1]);
+    const hs = parseScoreOrNull(midScoreMatch[2]);
+    const as = parseScoreOrNull(midScoreMatch[3]);
+    const awayTeam = cleanTeamNameToken(midScoreMatch[4]);
+    if (homeTeam && awayTeam) {
+      return {
+        sourceFileName: context.sourceFileName,
+        tableIndex: context.tableIndex,
+        tableTitle: context.tableTitle,
+        homeTeam,
+        awayTeam,
+        homeScore: hs,
+        awayScore: as,
+        roundNumber: round,
+        round,
+        stadium,
+        matchDate,
+        matchTime,
+        matchStatus: status || 'finished',
+        status: status || 'finished',
+        extractionConfidence: hs !== null && as !== null ? 97 : 50,
+      };
+    }
+  }
+
+  // الصيغة (5): النتيجة بعد كل فريق بدون أقواس: "الكرمل 2 عجلون 1"
+  const spaceEachScoreMatch = coreText.match(
+    /^([\u0600-\u06FFa-zA-Z\s]{2,25}?)\s+(\d+|غير واضح|\?+)\s+([\u0600-\u06FFa-zA-Z\s]{2,25}?)\s+(\d+|غير واضح|\?+)$/
+  );
+  if (spaceEachScoreMatch) {
+    const homeTeam = cleanTeamNameToken(spaceEachScoreMatch[1]);
+    const hs = parseScoreOrNull(spaceEachScoreMatch[2]);
+    const awayTeam = cleanTeamNameToken(spaceEachScoreMatch[3]);
+    const as = parseScoreOrNull(spaceEachScoreMatch[4]);
+    if (homeTeam && awayTeam) {
+      return {
+        sourceFileName: context.sourceFileName,
+        tableIndex: context.tableIndex,
+        tableTitle: context.tableTitle,
+        homeTeam,
+        awayTeam,
+        homeScore: hs,
+        awayScore: as,
+        roundNumber: round,
+        round,
+        stadium,
+        matchDate,
+        matchTime,
+        matchStatus: status || 'finished',
+        status: status || 'finished',
+        extractionConfidence: hs !== null && as !== null ? 92 : 50,
+      };
+    }
+  }
+
+  // الصيغة (6): "الكرمل × عجلون (2-1)" أو "الكرمل ضد عجلون 2-1" أو "الكرمل × عجلون"
+  const vsMatch = coreText.match(
+    /^(.+?)\s+(?:×|ضد|vs|VS|امام|أمام|على|-|–)\s+(.+?)(?:\s*[([]\s*([^)\]]+)\s*[)\]])?$/
+  );
+  if (vsMatch) {
+    const homeTeam = cleanTeamNameToken(vsMatch[1]);
+    let awayRaw = vsMatch[2].trim();
+    const parenContent = (vsMatch[3] || '').trim();
+
+    let hs: number | null = null;
+    let as: number | null = null;
+    let hasScoreAttempt = false;
+
+    const parenScore = parenContent.match(
+      /(\d+|غير واضح|\?+|؟؟)\s*[-–:/]\s*(\d+|غير واضح|\?+|؟؟)/
+    );
+    const trailingScore = awayRaw.match(
+      /^(.+?)\s+(?:بنتيجة\s*)?[([]?\s*(\d+|غير واضح|\?+|؟؟)\s*[-–:/]\s*(\d+|غير واضح|\?+|؟؟)\s*[)\]]?$/
+    );
+
+    if (parenScore) {
+      hasScoreAttempt = true;
+      hs = parseScoreOrNull(parenScore[1]);
+      as = parseScoreOrNull(parenScore[2]);
+    } else if (trailingScore) {
+      hasScoreAttempt = true;
+      awayRaw = trailingScore[1].trim();
+      hs = parseScoreOrNull(trailingScore[2]);
+      as = parseScoreOrNull(trailingScore[3]);
+    } else if (/غير واضح|\?+|؟؟/.test(awayRaw) || /غير واضح|\?+|؟؟/.test(parenContent)) {
+      hasScoreAttempt = true;
+      awayRaw = awayRaw.replace(/غير واضح|\?+|؟؟/g, '').trim();
+    }
+
+    const awayTeam = cleanTeamNameToken(awayRaw);
+    if (homeTeam && awayTeam) {
+      const effectiveStatus: MatchStatus =
+        status ||
+        (hasScoreAttempt ? 'finished' : context.defaultStatus);
+
+      return {
+        sourceFileName: context.sourceFileName,
+        tableIndex: context.tableIndex,
+        tableTitle: context.tableTitle,
+        homeTeam,
+        awayTeam,
+        homeScore: hs,
+        awayScore: as,
+        roundNumber: round,
+        round,
+        stadium,
+        matchDate,
+        matchTime,
+        matchStatus: effectiveStatus,
+        status: effectiveStatus,
+        extractionConfidence:
+          effectiveStatus === 'upcoming' || (hs !== null && as !== null) ? 93 : 45,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * تقسيم الفقرة النصية العربية الواحدة إلى جمل/مقاطع لاستخراج عدة مباريات من فقرة واحدة
+ */
+function splitArabicParagraphIntoMatchClauses(line: string): string[] {
+  // إذا كان السطر جدولاً مفصولاً بـ | ويحتوي على مباراة واحدة مع ملعب وجولة، لا نقسمه عند الفاصلة
+  if (line.includes('|') && !/،\s*(?:وفاز|وتغلب|وتعادل|وخسر|وفي|كما)/.test(line)) {
+    return [line];
+  }
+
+  // تقسيم الفقرة الإخبارية عند الفواصل العربية والنقاط وأدوات العطف الإخبارية
+  const clauses = line
+    .split(
+      /\s*(?:[؛;.]|،\s*(?=(?:و?(?:فاز|فوز|تغلب|انتصر|تعادل|خسر|خسارة|فيما|بينما|وفي|كما)|[\u0600-\u06FF\s]{2,20}\s+(?:\d+|\(\d+\)|×|ضد))))\s*/g
+    )
+    .map((c) => c.trim())
+    .filter((c) => c.length > 3);
+
+  // إذا كان هناك أكثر من نتيجة (2-1) في نفس المقطع مفصولة بفاصلة عادية "،" نقسمها أيضاً
+  const expanded: string[] = [];
+  for (const cl of clauses) {
+    const scoreMatches = cl.match(/(\d+|\(\d+\))\s*[-–:]?\s*(\d+|\(\d+\))/g) || [];
+    if (scoreMatches.length > 1 && cl.includes('،')) {
+      const subParts = cl
+        .split('،')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      expanded.push(...subParts);
+    } else {
+      expanded.push(cl);
+    }
+  }
+
+  return expanded;
+}
+
+/**
+ * تحليل النصوص الرياضية العربية (جداول، فقرات إخبارية، قوائم مباريات، نتائج، ترتيب، وأكثر من جدول في مصدر واحد)
  */
 export function parseArabicSportsTextToRows(
   rawText: string,
@@ -380,15 +792,30 @@ export function parseArabicSportsTextToRows(
   const normalized = normalizeDigits(rawText || '').replace(/\r\n/g, '\n');
   const lines = normalized
     .split('\n')
-    .map((l) => l.replace(/^[(\[\s]+|[)\]\s]+$/g, '').trim())
+    .map((l) => stripOuterWrappingParens(l))
     .filter((l) => l.length > 1 && !/^[-=_*#]+$/.test(l));
 
   const rows: Partial<SmartImportExtractedRow>[] = [];
   let currentRound = defaultRound;
+  let currentTableIndex = 1;
+  let currentTableTitle: string | undefined;
 
   for (const line of lines) {
+    // اكتشاف بداية جدول جديد أو مجموعة جديدة في نفس الصورة/النص
+    if (
+      /^(?:جدول|المجموعة|مجموعة|المرحلة)\s+[\u0600-\u06FF0-9]+/i.test(line) &&
+      line.length < 42 &&
+      !/\d+\s*[-:]\s*\d+/.test(line)
+    ) {
+      if (rows.length > 0) {
+        currentTableIndex += 1;
+      }
+      currentTableTitle = line;
+      continue;
+    }
+
     // التقاط عنوان الجولة إن وجد في سطر مستقل
-    if (/^(الجولة|جولة|الأسبوع|اسبوع)\s+[\u0600-\u06FF0-9]+$/i.test(line) && line.length < 28) {
+    if (/^(الجولة|جولة|الأسبوع|اسبوع)\s+[\u0600-\u06FF0-9]+$/i.test(line) && line.length < 30) {
       currentRound = line;
       continue;
     }
@@ -398,146 +825,79 @@ export function parseArabicSportsTextToRows(
       dataType === 'match_schedule' ||
       dataType === 'rounds_data'
     ) {
-      // أنماط المباريات والنتائج:
-      // 1) "الحسين إربد 2 - 1 الوحدات | الجولة 11 | ستاد الحسن"
-      // 2) "الفيصلي × الرمثا (1 - 1) - ستاد عمان"
-      // 3) "السلط ضد شباب الأردن | غير واضح - 0"
-      const parts = line.split(/[|،]/).map((p) => p.trim());
-      const mainPart = parts[0];
-
-      let round = currentRound;
-      let stadium = 'ستاد عمّان الدولي';
-      let matchDate = '';
-      let status: MatchStatus | undefined;
-
-      if (/مؤجل|تأجيل/.test(line)) status = 'postponed';
-      else if (/ملغ|إلغاء/.test(line)) status = 'cancelled';
-
-      for (const extra of parts.slice(1)) {
-        if (/الجولة|جولة|الأسبوع/.test(extra)) round = extra;
-        else if (/ستاد|ملعب|مدينة/.test(extra)) stadium = extra;
-        else if (/\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}:\d{2}/.test(extra)) matchDate = extra;
-      }
-
-      // نمط النتيجة المباشرة في المنتصف: فريق1 2 - 1 فريق2 (أو غير واضح / ؟)
-      const scoreMidMatch = mainPart.match(
-        /^(.+?)\s+(\d+|غير واضح|\?+|؟؟)\s*[-–:×xX]\s*(\d+|غير واضح|\?+|؟؟)\s+(.+)$/
-      );
-      if (scoreMidMatch) {
-        const homeTeam = scoreMidMatch[1].replace(/^(مباراة|تأجيل|نتيجة)[:\s]+/, '').trim();
-        const hsRaw = scoreMidMatch[2].trim();
-        const asRaw = scoreMidMatch[3].trim();
-        const awayTeam = scoreMidMatch[4].trim();
-        rows.push({
+      const clauses = splitArabicParagraphIntoMatchClauses(line);
+      for (const clause of clauses) {
+        const parsed = parseMatchClause(clause, {
+          round: currentRound,
+          stadium: '',
+          matchDate: '',
+          matchTime: '',
+          tableIndex: currentTableIndex,
+          tableTitle: currentTableTitle,
           sourceFileName,
-          homeTeam,
-          awayTeam,
-          homeScore: parseNumOrUnclear(hsRaw),
-          awayScore: parseNumOrUnclear(asRaw),
-          round,
-          stadium,
-          matchDate,
-          status: status || 'finished',
+          defaultStatus: dataType === 'match_schedule' ? 'upcoming' : 'finished',
         });
-        continue;
-      }
-
-      // نمط: فريق1 × فريق2 (2-1) أو فريق1 ضد فريق2
-      const vsMatch = mainPart.match(
-        /^(.+?)\s+(?:×|ضد|vs|VS|امام|أمام|-|–)\s+(.+?)(?:\s*\(([^)]+)\))?$/
-      );
-      if (vsMatch) {
-        const homeTeam = vsMatch[1].replace(/^(مباراة|تأجيل)[:\s]+/, '').trim();
-        let awayTeam = vsMatch[2].trim();
-        let hs: number | string = 0;
-        let as: number | string = 0;
-        let rowStatus: MatchStatus =
-          status || (dataType === 'match_results' ? 'finished' : 'upcoming');
-
-        const parenScore = (vsMatch[3] || '').match(
-          /(\d+|غير واضح|\?+)\s*[-–:]\s*(\d+|غير واضح|\?+)/
-        );
-        const trailingScore = awayTeam.match(
-          /^(.+?)\s+(\d+|غير واضح|\?+)\s*[-–:]\s*(\d+|غير واضح|\?+)$/
-        );
-
-        if (parenScore) {
-          hs = parseNumOrUnclear(parenScore[1]);
-          as = parseNumOrUnclear(parenScore[2]);
-          rowStatus = status || 'finished';
-        } else if (trailingScore) {
-          awayTeam = trailingScore[1].trim();
-          hs = parseNumOrUnclear(trailingScore[2]);
-          as = parseNumOrUnclear(trailingScore[3]);
-          rowStatus = status || 'finished';
-        } else if (dataType === 'match_results') {
-          hs = UNCLEAR_VALUE_MARKER;
-          as = UNCLEAR_VALUE_MARKER;
+        if (parsed) {
+          rows.push(parsed);
         }
-
-        rows.push({
-          sourceFileName,
-          homeTeam,
-          awayTeam,
-          homeScore: hs,
-          awayScore: as,
-          round,
-          stadium,
-          matchDate,
-          status: rowStatus,
-        });
       }
     } else if (dataType === 'standings_table') {
-      // تجاهل سطر الترويسة إن كان يحتوي على كلمات "الفريق" و"لعب" بدون أرقام
       if (/الفريق|النادي/.test(line) && /لعب|نقاط/.test(line) && !/\d/.test(line)) {
+        if (rows.length > 0) currentTableIndex += 1;
         continue;
       }
 
-      // نمط جدول الترتيب: "1. الحسين إربد 10 8 2 0 22 5 26" أو مفصول بـ | أو Tab
       const cleanedLine = line.replace(/^\d+\s*[.)-]\s*/, '').trim();
       const tokens = cleanedLine
         .split(/\s*[|\t،;]\s*|\s{2,}/)
         .map((t) => t.trim())
         .filter(Boolean);
 
-      if (tokens.length >= 4) {
-        const teamName = tokens[0];
-        const nums = tokens.slice(1);
-        if (nums.length >= 7) {
+      if (tokens.length >= 6) {
+        const offset = /^\d+$/.test(tokens[0]) && tokens.length >= 8 ? 1 : 0;
+        const teamName = tokens[offset];
+        const nums = tokens.slice(offset + 1);
+        if (nums.length >= 5) {
           rows.push({
             sourceFileName,
+            tableIndex: currentTableIndex,
+            tableTitle: currentTableTitle,
             teamName,
-            played: parseNumOrUnclear(nums[0]),
-            won: parseNumOrUnclear(nums[1]),
-            drawn: parseNumOrUnclear(nums[2]),
-            lost: parseNumOrUnclear(nums[3]),
-            goalsFor: parseNumOrUnclear(nums[4]),
-            goalsAgainst: parseNumOrUnclear(nums[5]),
-            points: parseNumOrUnclear(nums[nums.length - 1]),
+            played: parseScoreOrNull(nums[0]),
+            won: parseScoreOrNull(nums[1]),
+            drawn: parseScoreOrNull(nums[2]),
+            lost: parseScoreOrNull(nums[3]),
+            goalsFor: nums.length >= 7 ? parseScoreOrNull(nums[4]) : 0,
+            goalsAgainst: nums.length >= 7 ? parseScoreOrNull(nums[5]) : 0,
+            points: parseScoreOrNull(nums[nums.length - 1]),
           });
           continue;
         }
       }
 
-      // نمط سطر المسافات العادية: "الحسين إربد 10 8 2 0 22 5 26"
       const spaceMatch = cleanedLine.match(
         /^([\u0600-\u06FFa-zA-Z\s]+?)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)(?:\s+[+-]?\d+)?\s+(\d+|غير واضح|\?+)$/
       );
       if (spaceMatch) {
         rows.push({
           sourceFileName,
+          tableIndex: currentTableIndex,
+          tableTitle: currentTableTitle,
           teamName: spaceMatch[1].trim(),
-          played: parseNumOrUnclear(spaceMatch[2]),
-          won: parseNumOrUnclear(spaceMatch[3]),
-          drawn: parseNumOrUnclear(spaceMatch[4]),
-          lost: parseNumOrUnclear(spaceMatch[5]),
-          goalsFor: parseNumOrUnclear(spaceMatch[6]),
-          goalsAgainst: parseNumOrUnclear(spaceMatch[7]),
-          points: parseNumOrUnclear(spaceMatch[8]),
+          played: parseScoreOrNull(spaceMatch[2]),
+          won: parseScoreOrNull(spaceMatch[3]),
+          drawn: parseScoreOrNull(spaceMatch[4]),
+          lost: parseScoreOrNull(spaceMatch[5]),
+          goalsFor: parseScoreOrNull(spaceMatch[6]),
+          goalsAgainst: parseScoreOrNull(spaceMatch[7]),
+          points: parseScoreOrNull(spaceMatch[8]),
         });
       }
-    } else if (dataType === 'top_scorers' || dataType === 'players_stats' || dataType === 'players_list') {
-      // نمط: "محمود المرضي | الحسين إربد | 9 أهداف | 4 تمريرات | 11 مباراة"
+    } else if (
+      dataType === 'top_scorers' ||
+      dataType === 'players_stats' ||
+      dataType === 'players_list'
+    ) {
       const parts = line
         .replace(/^\d+\s*[.)-]\s*/, '')
         .split(/[|\t،-]/)
@@ -546,10 +906,11 @@ export function parseArabicSportsTextToRows(
       if (parts.length >= 2) {
         const nums = parts.slice(2).map((p) => {
           const m = p.match(/\d+|غير واضح|\?+/);
-          return m ? parseNumOrUnclear(m[0]) : UNCLEAR_VALUE_MARKER;
+          return m ? parseScoreOrNull(m[0]) : null;
         });
         rows.push({
           sourceFileName,
+          tableIndex: currentTableIndex,
           playerName: parts[0],
           teamName: parts[1],
           goals: nums[0] ?? 0,
@@ -558,7 +919,6 @@ export function parseArabicSportsTextToRows(
         });
       }
     } else if (dataType === 'goalkeepers_stats') {
-      // نمط: "يزيد أبو ليلى | الحسين إربد | 11 مباراة | 7 شباك نظيفة | 5 أهداف مستقبلة"
       const parts = line
         .replace(/^\d+\s*[.)-]\s*/, '')
         .split(/[|\t،-]/)
@@ -567,14 +927,15 @@ export function parseArabicSportsTextToRows(
       if (parts.length >= 2) {
         const nums = parts.slice(2).map((p) => {
           const m = p.match(/\d+|غير واضح|\?+/);
-          return m ? parseNumOrUnclear(m[0]) : UNCLEAR_VALUE_MARKER;
+          return m ? parseScoreOrNull(m[0]) : null;
         });
         rows.push({
           sourceFileName,
+          tableIndex: currentTableIndex,
           playerName: parts[0],
           teamName: parts[1],
           matches: nums[0] ?? 1,
-          cleanSheets: nums[1] ?? 0,
+          cleanSheets: nums[1],
           goalsConceded: nums[2] ?? 0,
         });
       }
@@ -587,8 +948,9 @@ export function parseArabicSportsTextToRows(
       if (parts.length >= 1) {
         rows.push({
           sourceFileName,
+          tableIndex: currentTableIndex,
           teamName: parts[0],
-          city: parts[1] || 'الأردن',
+          city: parts[1] || '',
         });
       }
     }
@@ -598,12 +960,13 @@ export function parseArabicSportsTextToRows(
 }
 
 /**
- * تحليل ملفات Excel (CSV / TSV / XLSX XML) إلى صفوف منظمة
+ * تحليل ملفات Excel (CSV / TSV / XLSX) مع دعم عدة جولات وترتيب أعمدة مرن
  */
 export function parseSpreadsheetContentToRows(
   textContent: string,
   dataType: SmartImportDataType,
-  sourceFileName: string
+  sourceFileName: string,
+  defaultRound = 'الجولة 1'
 ): Partial<SmartImportExtractedRow>[] {
   const normalized = normalizeDigits(textContent || '').replace(/\r\n/g, '\n').trim();
   if (!normalized) return [];
@@ -621,98 +984,216 @@ export function parseSpreadsheetContentToRows(
       .map((cell) => cell.replace(/^["']|["']$/g, '').trim());
   };
 
+  // فحص أسماء الأعمدة في السطر الأول لربطها ذكياً بأي ترتيب
   const firstCells = splitCsvLine(lines[0]);
   const hasHeader = firstCells.some((c) =>
-    /فريق|نادي|مستضيف|ضيف|لعب|نقاط|لاعب|حارس|team|home|away|played|points|player/i.test(c)
+    /فريق|نادي|مستضيف|ضيف|لعب|نقاط|لاعب|حارس|جولة|ملعب|نتيجة|team|home|away|played|points|player|round|stadium|score/i.test(
+      c
+    )
   );
+
+  const headerMap: Record<string, number> = {};
+  if (hasHeader) {
+    firstCells.forEach((colName, idx) => {
+      const c = colName.toLowerCase();
+      if (/أهداف المستضيف|اهداف المستضيف|اهداف 1|أهداف 1|home_score|homescore|score1/.test(c))
+        headerMap.homeScore = idx;
+      else if (/أهداف الضيف|اهداف الضيف|اهداف 2|أهداف 2|away_score|awayscore|score2/.test(c))
+        headerMap.awayScore = idx;
+      else if (/نتيجة|النتيجة|score|result/.test(c)) headerMap.combinedScore = idx;
+      else if (/مستضيف|الفريق الأول|فريق 1|home/.test(c)) headerMap.homeTeam = idx;
+      else if (/ضيف|الفريق الثاني|فريق 2|away/.test(c)) headerMap.awayTeam = idx;
+      else if (/جولة|الجولة|الأسبوع|round/.test(c)) headerMap.round = idx;
+      else if (/ملعب|الملعب|ستاد|stadium|venue/.test(c)) headerMap.stadium = idx;
+      else if (/تاريخ|التاريخ|date/.test(c)) headerMap.matchDate = idx;
+      else if (/وقت|الوقت|الساعة|time/.test(c)) headerMap.matchTime = idx;
+      else if (/فريق|النادي|team/.test(c)) headerMap.teamName = idx;
+    });
+  }
 
   const dataLines = hasHeader ? lines.slice(1) : lines;
   const rows: Partial<SmartImportExtractedRow>[] = [];
+  let currentRound = defaultRound;
+  let currentTableIndex = 1;
 
   for (const line of dataLines) {
-    const cells = splitCsvLine(line);
-    if (cells.length < 2) continue;
+    const cells = splitCsvLine(line).filter((c, idx, arr) => !(arr.length === 1 && !c));
+    if (cells.length === 0) continue;
+
+    // إذا كان السطر عبارة عن عنوان جولة مستقل داخل ملف Excel (مثل: "الجولة 2")
+    const nonEmptyCells = cells.filter(Boolean);
+    if (
+      nonEmptyCells.length === 1 &&
+      /^(الجولة|جولة|الأسبوع|اسبوع)\s+[\u0600-\u06FF0-9]+$/i.test(nonEmptyCells[0])
+    ) {
+      currentRound = nonEmptyCells[0];
+      continue;
+    }
 
     if (dataType === 'standings_table') {
-      // إذا كان العمود الأول رقم المركز، نتجاوزه
+      if (nonEmptyCells.some((c) => /الفريق|النادي/.test(c) && /لعب|نقاط/.test(line))) {
+        currentTableIndex += 1;
+        continue;
+      }
       const offset = /^\d+$/.test(cells[0]) && cells.length >= 8 ? 1 : 0;
       rows.push({
         sourceFileName,
-        teamName: cells[offset] || UNCLEAR_VALUE_MARKER,
-        played: parseNumOrUnclear(cells[offset + 1]),
-        won: parseNumOrUnclear(cells[offset + 2]),
-        drawn: parseNumOrUnclear(cells[offset + 3]),
-        lost: parseNumOrUnclear(cells[offset + 4]),
-        goalsFor: parseNumOrUnclear(cells[offset + 5]),
-        goalsAgainst: parseNumOrUnclear(cells[offset + 6]),
-        points: parseNumOrUnclear(cells[offset + 7] ?? cells[cells.length - 1]),
+        tableIndex: currentTableIndex,
+        teamName: cells[offset] || '',
+        played: parseScoreOrNull(cells[offset + 1]),
+        won: parseScoreOrNull(cells[offset + 2]),
+        drawn: parseScoreOrNull(cells[offset + 3]),
+        lost: parseScoreOrNull(cells[offset + 4]),
+        goalsFor: parseScoreOrNull(cells[offset + 5] ?? 0),
+        goalsAgainst: parseScoreOrNull(cells[offset + 6] ?? 0),
+        points: parseScoreOrNull(cells[offset + 7] ?? cells[cells.length - 1]),
       });
     } else if (
       dataType === 'match_results' ||
       dataType === 'match_schedule' ||
       dataType === 'rounds_data'
     ) {
-      // الأعمدة المتوقعة: الجولة | المستضيف | أهداف المستضيف | أهداف الضيف | الضيف | الملعب | التاريخ
-      // أو: المستضيف | الضيف | النتيجة (2-1) | الجولة | الملعب
-      if (cells.length >= 4 && /^\d+|غير واضح|\?+$/.test(cells[1]) && /^\d+|غير واضح|\?+$/.test(cells[2])) {
+      // 1) إذا توفرت خريطة ترويسة الأعمدة، نستخدمها مباشرة
+      if (hasHeader && headerMap.homeTeam !== undefined && headerMap.awayTeam !== undefined) {
+        let hs: number | null =
+          headerMap.homeScore !== undefined ? parseScoreOrNull(cells[headerMap.homeScore]) : null;
+        let as: number | null =
+          headerMap.awayScore !== undefined ? parseScoreOrNull(cells[headerMap.awayScore]) : null;
+
+        if (hs === null && as === null && headerMap.combinedScore !== undefined) {
+          const scText = cells[headerMap.combinedScore] || '';
+          const sm = scText.match(/(\d+|غير واضح|\?+)\s*[-–:/]\s*(\d+|غير واضح|\?+)/);
+          if (sm) {
+            hs = parseScoreOrNull(sm[1]);
+            as = parseScoreOrNull(sm[2]);
+          }
+        }
+
+        const rVal =
+          (headerMap.round !== undefined ? cells[headerMap.round] : '') || currentRound;
+        const stVal = headerMap.stadium !== undefined ? cells[headerMap.stadium] || '' : '';
+        const dtVal = headerMap.matchDate !== undefined ? cells[headerMap.matchDate] || '' : '';
+        const tmVal = headerMap.matchTime !== undefined ? cells[headerMap.matchTime] || '' : '';
+
         rows.push({
           sourceFileName,
-          homeTeam: cells[0],
-          homeScore: parseNumOrUnclear(cells[1]),
-          awayScore: parseNumOrUnclear(cells[2]),
-          awayTeam: cells[3],
-          round: cells[4] || 'الجولة 1',
-          stadium: cells[5] || 'ستاد عمّان الدولي',
-          matchDate: cells[6] || '',
-          status: dataType === 'match_schedule' ? 'upcoming' : 'finished',
+          tableIndex: currentTableIndex,
+          homeTeam: cleanTeamNameToken(cells[headerMap.homeTeam] || ''),
+          awayTeam: cleanTeamNameToken(cells[headerMap.awayTeam] || ''),
+          homeScore: hs,
+          awayScore: as,
+          roundNumber: rVal,
+          round: rVal,
+          stadium: stVal,
+          matchDate: dtVal,
+          matchTime: tmVal,
+          matchStatus: dataType === 'match_schedule' && hs === null ? 'upcoming' : 'finished',
+          status: dataType === 'match_schedule' && hs === null ? 'upcoming' : 'finished',
         });
-      } else if (cells.length >= 3 && /(\d+|غير واضح|\?+)\s*[-–:]\s*(\d+|غير واضح|\?+)/.test(cells[2])) {
-        const sm = cells[2].match(/(\d+|غير واضح|\?+)\s*[-–:]\s*(\d+|غير واضح|\?+)/)!;
-        rows.push({
-          sourceFileName,
-          homeTeam: cells[0],
-          awayTeam: cells[1],
-          homeScore: parseNumOrUnclear(sm[1]),
-          awayScore: parseNumOrUnclear(sm[2]),
-          round: cells[3] || 'الجولة 1',
-          stadium: cells[4] || 'ستاد عمّان الدولي',
-          status: 'finished',
-        });
-      } else {
-        rows.push({
-          sourceFileName,
-          homeTeam: cells[0],
-          awayTeam: cells[1],
-          homeScore: cells[2] !== undefined ? parseNumOrUnclear(cells[2]) : 0,
-          awayScore: cells[3] !== undefined ? parseNumOrUnclear(cells[3]) : 0,
-          round: cells[4] || 'الجولة 1',
-          stadium: cells[5] || 'ستاد عمّان الدولي',
-          status: dataType === 'match_schedule' ? 'upcoming' : 'finished',
-        });
+        continue;
       }
-    } else if (dataType === 'top_scorers' || dataType === 'players_stats' || dataType === 'players_list') {
+
+      // 2) تصنيف الخلايا ذكياً مهما كان ترتيب الأعمدة في ملف Excel
+      let round = currentRound;
+      let stadium = '';
+      let matchDate = '';
+      let matchTime = '';
+      let hs: number | null = null;
+      let as: number | null = null;
+      const teamCandidates: string[] = [];
+      const numericCells: (number | null)[] = [];
+      let sawScoreToken = false;
+
+      for (const cell of cells) {
+        const c = cell.trim();
+        if (!c) continue;
+        if (/^(الجولة|جولة|الأسبوع|اسبوع)\s+[\u0600-\u06FF0-9]+$/i.test(c)) {
+          round = c;
+        } else if (/^(?:ستاد|ملعب|مدينة|صالة)\s+/.test(c)) {
+          stadium = c;
+        } else if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$|^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$/.test(c)) {
+          matchDate = c;
+        } else if (/^\d{1,2}:\d{2}(\s*(?:ص|م|AM|PM))?$/i.test(c)) {
+          matchTime = c;
+        } else if (/^[([]?\s*(\d+|غير واضح|\?+)\s*[-–:/]\s*(\d+|غير واضح|\?+)\s*[)\]]?$/.test(c)) {
+          const sm = c.match(/(\d+|غير واضح|\?+)\s*[-–:/]\s*(\d+|غير واضح|\?+)/)!;
+          hs = parseScoreOrNull(sm[1]);
+          as = parseScoreOrNull(sm[2]);
+          sawScoreToken = true;
+        } else if (/^\d+$|^غير واضح$|^\?+$/.test(c)) {
+          numericCells.push(parseScoreOrNull(c));
+          sawScoreToken = true;
+        } else {
+          teamCandidates.push(c);
+        }
+      }
+
+      if (hs === null && as === null && numericCells.length >= 2) {
+        hs = numericCells[0];
+        as = numericCells[1];
+      }
+
+      if (teamCandidates.length >= 2) {
+        rows.push({
+          sourceFileName,
+          tableIndex: currentTableIndex,
+          homeTeam: cleanTeamNameToken(teamCandidates[0]),
+          awayTeam: cleanTeamNameToken(teamCandidates[1]),
+          homeScore: hs,
+          awayScore: as,
+          roundNumber: round,
+          round,
+          stadium: stadium || teamCandidates[2] || '',
+          matchDate,
+          matchTime,
+          matchStatus:
+            dataType === 'match_schedule' && !sawScoreToken ? 'upcoming' : 'finished',
+          status:
+            dataType === 'match_schedule' && !sawScoreToken ? 'upcoming' : 'finished',
+        });
+      } else if (teamCandidates.length === 1) {
+        // ربما الكل في خلية نصية واحدة داخل Excel
+        const parsedClause = parseMatchClause(teamCandidates[0], {
+          round,
+          stadium,
+          matchDate,
+          matchTime,
+          tableIndex: currentTableIndex,
+          sourceFileName,
+          defaultStatus: dataType === 'match_schedule' ? 'upcoming' : 'finished',
+        });
+        if (parsedClause) rows.push(parsedClause);
+      }
+    } else if (
+      dataType === 'top_scorers' ||
+      dataType === 'players_stats' ||
+      dataType === 'players_list'
+    ) {
       rows.push({
         sourceFileName,
-        playerName: cells[0],
-        teamName: cells[1],
-        goals: parseNumOrUnclear(cells[2] ?? 0),
-        assists: parseNumOrUnclear(cells[3] ?? 0),
-        matches: parseNumOrUnclear(cells[4] ?? 1),
+        tableIndex: currentTableIndex,
+        playerName: cells[0] || '',
+        teamName: cells[1] || '',
+        goals: parseScoreOrNull(cells[2] ?? 0) ?? 0,
+        assists: parseScoreOrNull(cells[3] ?? 0) ?? 0,
+        matches: parseScoreOrNull(cells[4] ?? 1) ?? 1,
       });
     } else if (dataType === 'goalkeepers_stats') {
       rows.push({
         sourceFileName,
-        playerName: cells[0],
-        teamName: cells[1],
-        matches: parseNumOrUnclear(cells[2] ?? 1),
-        cleanSheets: parseNumOrUnclear(cells[3] ?? 0),
-        goalsConceded: parseNumOrUnclear(cells[4] ?? 0),
+        tableIndex: currentTableIndex,
+        playerName: cells[0] || '',
+        teamName: cells[1] || '',
+        matches: parseScoreOrNull(cells[2] ?? 1) ?? 1,
+        cleanSheets: parseScoreOrNull(cells[3]),
+        goalsConceded: parseScoreOrNull(cells[4] ?? 0) ?? 0,
       });
     } else if (dataType === 'teams_list') {
       rows.push({
         sourceFileName,
-        teamName: cells[0],
-        city: cells[1] || 'الأردن',
+        tableIndex: currentTableIndex,
+        teamName: cells[0] || '',
+        city: cells[1] || '',
       });
     }
   }
@@ -721,21 +1202,19 @@ export function parseSpreadsheetContentToRows(
 }
 
 /**
- * استخراج النصوص والجداول من ملف Excel (.xlsx) أو (.csv) مباشرة بدون مكتبات خارجية ثقيلة
+ * استخراج النصوص والجداول من جميع أوراق ملف Excel (.xlsx) أو (.csv)
  */
 export async function extractTextFromExcelBuffer(
   buffer: ArrayBuffer,
   fileName: string
 ): Promise<string> {
   const bytes = new Uint8Array(buffer);
-  // التحقق مما إذا كان الملف CSV نصياً أو ملف ZIP خاص بـ XLSX (يبدأ بـ PK\x03\x04)
   const isZip = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
   if (!isZip || fileName.toLowerCase().endsWith('.csv') || fileName.toLowerCase().endsWith('.tsv')) {
     return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
   }
 
   try {
-    // قراءة مدخلات ملف ZIP لاستخراج xl/sharedStrings.xml و xl/worksheets/sheet1.xml
     const view = new DataView(buffer);
     const entries: Record<string, string> = {};
     let offset = 0;
@@ -788,32 +1267,37 @@ export async function extractTextFromExcelBuffer(
       sharedStrings.push(text);
     }
 
-    const sheetKey = Object.keys(entries).find((k) => k.startsWith('xl/worksheets/sheet'));
-    if (sheetKey && entries[sheetKey]) {
-      const sheetXml = entries[sheetKey];
-      const rowMatches = sheetXml.match(/<row[\s\S]*?<\/row>/g) || [];
-      const csvLines: string[] = [];
+    // قراءة جميع أوراق العمل (Worksheets) لدعم ملفات Excel التي تحتوي على عدة جولات في عدة أوراق
+    const sheetKeys = Object.keys(entries)
+      .filter((k) => k.startsWith('xl/worksheets/sheet'))
+      .sort();
 
-      for (const rowXml of rowMatches) {
-        const cellMatches = rowXml.match(/<c\b[\s\S]*?(?:\/>|<\/c>)/g) || [];
-        const rowCells: string[] = [];
-        for (const cXml of cellMatches) {
-          const isShared = /t=["']s["']/.test(cXml);
-          const inlineMatch = cXml.match(/<t[^>]*>([\s\S]*?)<\/t>/);
-          const vMatch = cXml.match(/<v>([\s\S]*?)<\/v>/);
-          if (inlineMatch) {
-            rowCells.push(inlineMatch[1].trim());
-          } else if (vMatch) {
-            const rawV = vMatch[1].trim();
-            if (isShared && sharedStrings[Number(rawV)] !== undefined) {
-              rowCells.push(sharedStrings[Number(rawV)]);
-            } else {
-              rowCells.push(rawV);
+    if (sheetKeys.length > 0) {
+      const csvLines: string[] = [];
+      for (const sheetKey of sheetKeys) {
+        const sheetXml = entries[sheetKey];
+        const rowMatches = sheetXml.match(/<row[\s\S]*?<\/row>/g) || [];
+        for (const rowXml of rowMatches) {
+          const cellMatches = rowXml.match(/<c\b[\s\S]*?(?:\/>|<\/c>)/g) || [];
+          const rowCells: string[] = [];
+          for (const cXml of cellMatches) {
+            const isShared = /t=["']s["']/.test(cXml);
+            const inlineMatch = cXml.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+            const vMatch = cXml.match(/<v>([\s\S]*?)<\/v>/);
+            if (inlineMatch) {
+              rowCells.push(inlineMatch[1].trim());
+            } else if (vMatch) {
+              const rawV = vMatch[1].trim();
+              if (isShared && sharedStrings[Number(rawV)] !== undefined) {
+                rowCells.push(sharedStrings[Number(rawV)]);
+              } else {
+                rowCells.push(rawV);
+              }
             }
           }
-        }
-        if (rowCells.length > 0) {
-          csvLines.push(rowCells.join(','));
+          if (rowCells.length > 0) {
+            csvLines.push(rowCells.join(','));
+          }
         }
       }
       if (csvLines.length > 0) {
@@ -828,16 +1312,15 @@ export async function extractTextFromExcelBuffer(
 }
 
 /**
- * استخراج النصوص والجداول من ملف PDF مباشرة (يدعم PDF النصي + Gemini Multimodal لملفات PDF المصورة)
+ * استخراج النصوص والجداول من ملف PDF مباشرة
  */
 export function extractTextFromPdfBuffer(buffer: ArrayBuffer): string {
   try {
     const bytes = new Uint8Array(buffer);
     const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 
-    // 1) استخراج مقاطع النصوص داخل أقواس PDF النصية (...) أو التعليقات المضمنة
     const extractedLines: string[] = [];
-    const textBlocks = utf8Text.match(/\(([^()]{2,200})\)/g) || [];
+    const textBlocks = utf8Text.match(/\(([^()]{2,240})\)/g) || [];
     for (const block of textBlocks) {
       const inner = block.slice(1, -1).trim();
       if (/[\u0600-\u06FF]/.test(inner) || /\d+\s*[-:]\s*\d+/.test(inner)) {
@@ -845,22 +1328,267 @@ export function extractTextFromPdfBuffer(buffer: ArrayBuffer): string {
       }
     }
 
-    // 2) التقاط أي أسطر عربية واضحة مدمجة داخل ملف الـ PDF
     const arabicLines = utf8Text
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => /[\u0600-\u06FF]{2,}/.test(l) && !l.startsWith('%PDF'));
 
-    const combined = [...arabicLines, ...extractedLines].join('\n').trim();
-    return combined;
+    return Array.from(new Set([...arabicLines, ...extractedLines])).join('\n').trim();
   } catch {
     return '';
   }
 }
 
 /**
- * استدعاء Gemini Multimodal (عبر Firebase AI Logic / Gemini 2.0 Flash API)
- * لاستخراج الجداول الرياضية من الصور (JPG/PNG) وملفات PDF والنصوص وفق مخطط JSON ثابت
+ * محول JSON المرن والآمن (JSON Schema Normalizer):
+ * يتعامل مع أي تنسيق يرجعه النموذج (rows, matches, standings, tables, results)
+ * ويتحقق من نوع كل حقل دون إسقاط الصفوف الصحيحة أو إنشاء صفوف وهمية
+ */
+export function normalizeAiJsonResponse(
+  rawJsonText: string,
+  dataType: SmartImportDataType,
+  sourceFileName: string,
+  defaultRound = 'الجولة 1'
+): {
+  rows: Partial<SmartImportExtractedRow>[];
+  extractedOcrText: string;
+  jsonItemsCount: number;
+  parseErrors: string[];
+} {
+  const parseErrors: string[] = [];
+  if (!rawJsonText || !rawJsonText.trim()) {
+    return { rows: [], extractedOcrText: '', jsonItemsCount: 0, parseErrors: ['استجابة JSON فارغة'] };
+  }
+
+  let parsed: unknown;
+  try {
+    const cleaned = rawJsonText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    // محاولة استخراج أول كائن JSON أو مصفوفة JSON من النص في حال أضاف النموذج شرحاً نصياً
+    const objMatch = rawJsonText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (!objMatch) {
+      return {
+        rows: [],
+        extractedOcrText: rawJsonText,
+        jsonItemsCount: 0,
+        parseErrors: [err instanceof Error ? err.message : 'تعذر تحليل JSON'],
+      };
+    }
+    try {
+      parsed = JSON.parse(objMatch[1]);
+    } catch (innerErr) {
+      return {
+        rows: [],
+        extractedOcrText: rawJsonText,
+        jsonItemsCount: 0,
+        parseErrors: [innerErr instanceof Error ? innerErr.message : 'خطأ في بناء JSON'],
+      };
+    }
+  }
+
+  const rootObj = (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>;
+  const extractedOcrText =
+    typeof rootObj.extractedText === 'string'
+      ? rootObj.extractedText
+      : typeof rootObj.ocrText === 'string'
+      ? rootObj.ocrText
+      : '';
+
+  // جمع العناصر سواء كانت في rows أو matches أو standings أو results أو tables متعددة
+  const rawItems: { item: Record<string, unknown>; tableIndex: number; tableTitle?: string }[] = [];
+
+  if (Array.isArray(parsed)) {
+    parsed.forEach((it) => {
+      if (it && typeof it === 'object') {
+        rawItems.push({ item: it as Record<string, unknown>, tableIndex: 1 });
+      }
+    });
+  } else if (Array.isArray(rootObj.tables)) {
+    rootObj.tables.forEach((tbl, tIdx) => {
+      if (tbl && typeof tbl === 'object') {
+        const tObj = tbl as Record<string, unknown>;
+        const tTitle = typeof tObj.title === 'string' ? tObj.title : typeof tObj.tableName === 'string' ? tObj.tableName : undefined;
+        const tRows = (tObj.rows || tObj.matches || tObj.standings || tObj.items) as unknown[];
+        if (Array.isArray(tRows)) {
+          tRows.forEach((r) => {
+            if (r && typeof r === 'object') {
+              rawItems.push({
+                item: r as Record<string, unknown>,
+                tableIndex: tIdx + 1,
+                tableTitle: tTitle,
+              });
+            }
+          });
+        }
+      }
+    });
+  } else {
+    const candidateArrays = [
+      rootObj.rows,
+      rootObj.matches,
+      rootObj.results,
+      rootObj.standings,
+      rootObj.data,
+      rootObj.items,
+      rootObj.players,
+      rootObj.teams,
+    ];
+    for (const arr of candidateArrays) {
+      if (Array.isArray(arr)) {
+        arr.forEach((it) => {
+          if (it && typeof it === 'object') {
+            rawItems.push({ item: it as Record<string, unknown>, tableIndex: 1 });
+          }
+        });
+        break;
+      }
+    }
+  }
+
+  const normalizedRows: Partial<SmartImportExtractedRow>[] = [];
+
+  rawItems.forEach(({ item, tableIndex, tableTitle }, idx) => {
+    try {
+      const str = (v: unknown): string =>
+        v === null || v === undefined ? '' : normalizeDigits(String(v)).trim();
+
+      const homeTeam = cleanTeamNameToken(
+        str(
+          item.homeTeam ??
+            item.home_team ??
+            item.team1 ??
+            item.firstTeam ??
+            item.hostTeam ??
+            item['الفريق_الأول'] ??
+            item['المستضيف']
+        )
+      );
+      const awayTeam = cleanTeamNameToken(
+        str(
+          item.awayTeam ??
+            item.away_team ??
+            item.team2 ??
+            item.secondTeam ??
+            item.guestTeam ??
+            item['الفريق_الثاني'] ??
+            item['الضيف']
+        )
+      );
+
+      let homeScore = parseScoreOrNull(
+        item.homeScore ?? item.home_score ?? item.score1 ?? item.homeGoals ?? item['أهداف_المستضيف']
+      );
+      let awayScore = parseScoreOrNull(
+        item.awayScore ?? item.away_score ?? item.score2 ?? item.awayGoals ?? item['أهداف_الضيف']
+      );
+
+      // إذا أرسل النموذج النتيجة مدمجة في حقل score أو result مثل "2-1" أو "(2) (1)"
+      if (homeScore === null && awayScore === null && (item.score || item.result || item['النتيجة'])) {
+        const combined = str(item.score ?? item.result ?? item['النتيجة']);
+        const sm = combined.match(/(\d+)\s*[-–:/)\]]\s*[([\s]*(\d+)/);
+        if (sm) {
+          homeScore = parseScoreOrNull(sm[1]);
+          awayScore = parseScoreOrNull(sm[2]);
+        }
+      }
+
+      const roundVal =
+        str(item.roundNumber ?? item.round ?? item.week ?? item['الجولة']) || defaultRound;
+      const stadiumVal = str(item.stadium ?? item.venue ?? item['الملعب']);
+      const dateVal = str(item.matchDate ?? item.date ?? item['التاريخ']);
+      const timeVal = str(item.matchTime ?? item.time ?? item.kickoffTime ?? item['الوقت']);
+      const teamName = cleanTeamNameToken(
+        str(item.teamName ?? item.team ?? item.club ?? item['الفريق'] ?? item['النادي'])
+      );
+
+      normalizedRows.push({
+        sourceFileName,
+        tableIndex: typeof item.tableIndex === 'number' ? item.tableIndex : tableIndex,
+        tableTitle: typeof item.tableTitle === 'string' ? item.tableTitle : tableTitle,
+        competitionName: str(item.competitionName ?? item.competition),
+        season: str(item.season),
+        ageCategory: str(item.ageCategory),
+        groupName: str(item.groupName ?? item.group),
+        roundNumber: roundVal,
+        round: roundVal,
+        matchDate: dateVal,
+        matchTime: timeVal,
+        stadium: stadiumVal,
+        homeTeam,
+        awayTeam,
+        homeScore,
+        awayScore,
+        matchStatus: (item.matchStatus ||
+          item.status ||
+          (dataType === 'match_schedule' && homeScore === null ? 'upcoming' : 'finished')) as MatchStatus,
+        status: (item.matchStatus ||
+          item.status ||
+          (dataType === 'match_schedule' && homeScore === null ? 'upcoming' : 'finished')) as MatchStatus,
+        extractionConfidence:
+          typeof item.extractionConfidence === 'number' ? item.extractionConfidence : 92,
+        teamName,
+        played: parseScoreOrNull(item.played ?? item.p ?? item['لعب']),
+        won: parseScoreOrNull(item.won ?? item.w ?? item['فاز']),
+        drawn: parseScoreOrNull(item.drawn ?? item.d ?? item['تعادل']),
+        lost: parseScoreOrNull(item.lost ?? item.l ?? item['خسر']),
+        goalsFor: parseScoreOrNull(item.goalsFor ?? item.gf ?? item['له']),
+        goalsAgainst: parseScoreOrNull(item.goalsAgainst ?? item.ga ?? item['عليه']),
+        points: parseScoreOrNull(item.points ?? item.pts ?? item['النقاط']),
+        playerName: str(item.playerName ?? item.player ?? item['اللاعب']),
+        goals: parseScoreOrNull(item.goals ?? item['الأهداف']),
+        assists: parseScoreOrNull(item.assists ?? item['الصناعة']),
+        matches: parseScoreOrNull(item.matches ?? item['المباريات']),
+        cleanSheets: parseScoreOrNull(item.cleanSheets ?? item.clean_sheets ?? item['الشباك_النظيفة']),
+        goalsConceded: parseScoreOrNull(
+          item.goalsConceded ?? item.goals_conceded ?? item['الأهداف_المستقبلة']
+        ),
+        city: str(item.city ?? item['المدينة']),
+      });
+    } catch (rowErr) {
+      parseErrors.push(`خطأ في تحويل العنصر #${idx + 1}: ${String(rowErr)}`);
+    }
+  });
+
+  return {
+    rows: normalizedRows,
+    extractedOcrText,
+    jsonItemsCount: rawItems.length,
+    parseErrors,
+  };
+}
+
+/**
+ * استخراج النص المضمن أو جدول الصورة (OCR & Table Structure Decoder)
+ */
+export function extractEmbeddedOcrTextFromImageBase64(fileBase64: string): string {
+  try {
+    const cleanBase64 = fileBase64.replace(/^data:[^;]+;base64,/, '');
+    const binaryStr =
+      typeof atob === 'function'
+        ? atob(cleanBase64)
+        : Buffer.from(cleanBase64, 'base64').toString('binary');
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    // استخراج الأسطر التي تحتوي على أحرف عربية أو نتائج رياضية واضحة
+    const validLines = decoded
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => /[\u0600-\u06FF]{2,}/.test(l));
+    return validLines.join('\n').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * استدعاء Gemini Multimodal + OCR + محلل الجداول المتعددة مع إرجاع سجل تشخيصي كامل للمطور
  */
 export async function extractSportsDataWithGeminiAI(params: {
   dataType: SmartImportDataType;
@@ -875,27 +1603,69 @@ export async function extractSportsDataWithGeminiAI(params: {
 }): Promise<{
   rows: Partial<SmartImportExtractedRow>[];
   usedEngine: 'gemini_multimodal' | 'smart_deterministic';
+  extractedOcrText: string;
+  rawAiResponseSanitized: string;
+  jsonItemsCount: number;
+  parseErrors: string[];
 }> {
   const apiKey = params.geminiApiKey?.trim();
+  const parseErrors: string[] = [];
+  let rawAiResponseSanitized = '';
+  let extractedOcrText = params.rawText || '';
 
+  // استخراج النص المضمن في الصورة إن وجد للمقارنة في شاشة المراجعة
+  if (!extractedOcrText && params.fileBase64) {
+    extractedOcrText = extractEmbeddedOcrTextFromImageBase64(params.fileBase64);
+  }
+
+  // 1) إذا توفر مفتاح Gemini، نرسل الصورة/المستند/النص إلى Gemini 2.0 Flash Multimodal
   if (apiKey && (params.fileBase64 || params.rawText)) {
     try {
-      const schemaInstruction = `أنت نظام ذكاء اصطناعي رياضي متخصص في استخراج الجداول الرياضية الأردنية لتطبيق WATEEN SPORT.
-نوع البيانات المطلوب استخراجها: "${params.dataType}".
-قواعد صارمة إلزامية:
-1. لا تخترع أو تخمّن أي معلومة غير موجودة في المصدر نهائياً.
-2. إذا كانت أي قيمة أو رقم أو اسم غير مقروء بثقة 100%، ضع القيمة النصية "${UNCLEAR_VALUE_MARKER}".
-3. أعد النتيجة بصيغة JSON فقط تحتوي على مصفوفة باسم "rows".
-4. لكل عنصر في "rows" استخدم الحقول التالية حسب نوع البيانات:
-- جدول ترتيب (standings_table): {"teamName": "", "played": 0, "won": 0, "drawn": 0, "lost": 0, "goalsFor": 0, "goalsAgainst": 0, "points": 0}
-- مباريات أو نتائج أو جولات (match_results / match_schedule / rounds_data): {"homeTeam": "", "awayTeam": "", "homeScore": 0, "awayScore": 0, "round": "${params.roundName || 'الجولة 1'}", "stadium": "", "matchDate": "", "status": "finished"}
-- هدافين أو إحصائيات لاعبين (top_scorers / players_stats / players_list): {"playerName": "", "teamName": "", "goals": 0, "assists": 0, "matches": 0}
-- إحصائيات حراس (goalkeepers_stats): {"playerName": "", "teamName": "", "matches": 0, "cleanSheets": 0, "goalsConceded": 0}
-- قائمة فرق (teams_list): {"teamName": "", "city": ""}`;
+      const schemaInstruction = `أنت محرك استخراج بيانات رياضية وتحليل جداول OCR متخصص في البطولات الأردنية لتطبيق WATEEN SPORT.
+نوع البيانات المطلوب: "${params.dataType}".
+التعليمات الصارمة:
+1. اقرأ جميع الجداول والفقرات الموجودة في المصدر بدقة (حتى لو احتوت الصورة على أكثر من جدول واحد).
+2. حافظ على ترتيب الصفوف والأعمدة، وحوّل الأرقام الهندية (٠-٩) إلى أرقام قياسية (0-9).
+3. لا تخترع أي فريق أو نتيجة غير موجودة في المصدر. إذا كانت النتيجة أو اسم الفريق غير واضح، ضع null في حقل النتيجة أو "" في اسم الفريق.
+4. غياب اسم الملعب أو الوقت لا يمنع استخراج المباراة؛ اترك الحقل الاختياري فارغاً "".
+5. أعد كائن JSON فقط بالتنسيق التالي:
+{
+  "extractedText": "النص الكامل المقروء من الصورة أو الجدول للمقارنة",
+  "rows": [
+    {
+      "tableIndex": 1,
+      "tableTitle": "اسم الجدول أو المجموعة إن وجد",
+      "homeTeam": "اسم الفريق الأول",
+      "awayTeam": "اسم الفريق الثاني",
+      "homeScore": 2,
+      "awayScore": 1,
+      "roundNumber": "${params.roundName || 'الجولة 1'}",
+      "matchDate": "",
+      "matchTime": "",
+      "stadium": "",
+      "matchStatus": "finished",
+      "teamName": "لجداول الترتيب أو قوائم الفرق",
+      "played": 0,
+      "won": 0,
+      "drawn": 0,
+      "lost": 0,
+      "goalsFor": 0,
+      "goalsAgainst": 0,
+      "points": 0,
+      "playerName": "",
+      "goals": 0,
+      "assists": 0,
+      "matches": 0,
+      "cleanSheets": 0,
+      "goalsConceded": 0,
+      "extractionConfidence": 95
+    }
+  ]
+}`;
 
       const parts: Record<string, unknown>[] = [{ text: schemaInstruction }];
       if (params.rawText) {
-        parts.push({ text: `النص المصدر:\n${params.rawText}` });
+        parts.push({ text: `المحتوى النصي المصدر:\n${params.rawText}` });
       }
       if (params.fileBase64 && params.mimeType) {
         const cleanBase64 = params.fileBase64.replace(/^data:[^;]+;base64,/, '');
@@ -917,7 +1687,7 @@ export async function extractSportsDataWithGeminiAI(params: {
           body: JSON.stringify({
             contents: [{ parts }],
             generationConfig: {
-              temperature: 0.1,
+              temperature: 0.05,
               responseMimeType: 'application/json',
             },
           }),
@@ -926,39 +1696,77 @@ export async function extractSportsDataWithGeminiAI(params: {
 
       if (res.ok) {
         const json = await res.json();
-        const rawTextOut = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawTextOut) {
-          const cleaned = rawTextOut.replace(/^```json\s*|\s*```$/g, '').trim();
-          const parsed = JSON.parse(cleaned);
-          const arr = Array.isArray(parsed) ? parsed : Array.isArray(parsed.rows) ? parsed.rows : [];
-          if (arr.length > 0) {
-            return {
-              rows: arr.map((r: Partial<SmartImportExtractedRow>) => ({
-                ...r,
-                sourceFileName: params.sourceFileName,
-              })),
-              usedEngine: 'gemini_multimodal',
-            };
-          }
+        const rawTextOut = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        rawAiResponseSanitized = rawTextOut.slice(0, 4000);
+        const normResult = normalizeAiJsonResponse(
+          rawTextOut,
+          params.dataType,
+          params.sourceFileName,
+          params.roundName || 'الجولة 1'
+        );
+        parseErrors.push(...normResult.parseErrors);
+
+        if (normResult.extractedOcrText) {
+          extractedOcrText = normResult.extractedOcrText;
         }
+
+        if (normResult.rows.length > 0) {
+          return {
+            rows: normResult.rows,
+            usedEngine: 'gemini_multimodal',
+            extractedOcrText,
+            rawAiResponseSanitized,
+            jsonItemsCount: normResult.jsonItemsCount,
+            parseErrors,
+          };
+        }
+      } else {
+        parseErrors.push(`Gemini HTTP ${res.status}`);
       }
-    } catch {
-      // الانتقال التلقائي إلى المحرك التحليلي المحلي الموثوق
+    } catch (err) {
+      parseErrors.push(`Gemini Request Error: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  // المحرك التحليلي المدمج للنصوص وملفات الجداول
-  if (params.rawText) {
-    const isCsvLike =
-      params.sourceFileName.endsWith('.csv') ||
-      params.sourceFileName.endsWith('.tsv') ||
-      params.sourceFileName.endsWith('.xlsx') ||
-      (params.rawText.includes(',') && params.rawText.split('\n')[0].split(',').length >= 3);
+  // 2) تحليل النص المستخرج (سواء من لصق مباشر، أو Excel، أو PDF، أو نص OCR المستخرج من الصورة)
+  if (extractedOcrText) {
+    // فحص ما إذا كان النص نفسه عبارة عن JSON
+    if (extractedOcrText.trim().startsWith('{') || extractedOcrText.trim().startsWith('[')) {
+      const jsonNorm = normalizeAiJsonResponse(
+        extractedOcrText,
+        params.dataType,
+        params.sourceFileName,
+        params.roundName || 'الجولة 1'
+      );
+      if (jsonNorm.rows.length > 0) {
+        return {
+          rows: jsonNorm.rows,
+          usedEngine: 'smart_deterministic',
+          extractedOcrText: jsonNorm.extractedOcrText || extractedOcrText,
+          rawAiResponseSanitized: extractedOcrText.slice(0, 2000),
+          jsonItemsCount: jsonNorm.jsonItemsCount,
+          parseErrors: [...parseErrors, ...jsonNorm.parseErrors],
+        };
+      }
+    }
 
-    const parsedRows = isCsvLike
-      ? parseSpreadsheetContentToRows(params.rawText, params.dataType, params.sourceFileName)
+    const isSpreadsheet =
+      params.sourceFileName.toLowerCase().endsWith('.csv') ||
+      params.sourceFileName.toLowerCase().endsWith('.tsv') ||
+      params.sourceFileName.toLowerCase().endsWith('.xlsx') ||
+      (extractedOcrText.includes(',') &&
+        extractedOcrText.split('\n')[0].split(',').length >= 3 &&
+        !/،/.test(extractedOcrText.split('\n')[0]));
+
+    const parsedRows = isSpreadsheet
+      ? parseSpreadsheetContentToRows(
+          extractedOcrText,
+          params.dataType,
+          params.sourceFileName,
+          params.roundName || 'الجولة 1'
+        )
       : parseArabicSportsTextToRows(
-          params.rawText,
+          extractedOcrText,
           params.dataType,
           params.roundName || 'الجولة 1',
           params.sourceFileName
@@ -967,78 +1775,30 @@ export async function extractSportsDataWithGeminiAI(params: {
     return {
       rows: parsedRows,
       usedEngine: 'smart_deterministic',
+      extractedOcrText,
+      rawAiResponseSanitized: rawAiResponseSanitized || `[Deterministic Parser: ${parsedRows.length} items]`,
+      jsonItemsCount: parsedRows.length,
+      parseErrors,
     };
   }
 
-  if (params.fileBase64 && (params.mimeType?.startsWith('image/') || params.mimeType === 'application/pdf')) {
-    // في حال عدم توفر مفتاح Gemini، نحاول استخراج أي نص مضمّن داخل البيانات الثنائية أو إنشاء صفوف أولية قابلة للمراجعة مع الصورة المصدر
-    try {
-      const cleanBase64 = params.fileBase64.replace(/^data:[^;]+;base64,/, '');
-      const binaryStr = typeof atob === 'function' ? atob(cleanBase64) : Buffer.from(cleanBase64, 'base64').toString('binary');
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-      const decodedText = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-      const parsedFromEmbedded = parseArabicSportsTextToRows(
-        decodedText,
-        params.dataType,
-        params.roundName || 'الجولة 1',
-        params.sourceFileName
-      );
-      if (parsedFromEmbedded.length > 0) {
-        return {
-          rows: parsedFromEmbedded,
-          usedEngine: 'smart_deterministic',
-        };
-      }
-    } catch {
-      // ignore binary decode error
-    }
-
-    // إرجاع صف أولي بعلامة "غير واضح" لإلزام المراجعة اليدوية أمام صورة المصدر عند غياب مفتاح Gemini
-    if (params.dataType === 'standings_table') {
-      return {
-        rows: [
-          {
-            sourceFileName: params.sourceFileName,
-            teamName: UNCLEAR_VALUE_MARKER,
-            played: UNCLEAR_VALUE_MARKER,
-            won: UNCLEAR_VALUE_MARKER,
-            drawn: UNCLEAR_VALUE_MARKER,
-            lost: UNCLEAR_VALUE_MARKER,
-            goalsFor: UNCLEAR_VALUE_MARKER,
-            goalsAgainst: UNCLEAR_VALUE_MARKER,
-            points: UNCLEAR_VALUE_MARKER,
-          },
-        ],
-        usedEngine: 'smart_deterministic',
-      };
-    }
-
-    return {
-      rows: [
-        {
-          sourceFileName: params.sourceFileName,
-          homeTeam: UNCLEAR_VALUE_MARKER,
-          awayTeam: UNCLEAR_VALUE_MARKER,
-          homeScore: UNCLEAR_VALUE_MARKER,
-          awayScore: UNCLEAR_VALUE_MARKER,
-          round: params.roundName || 'الجولة 1',
-          stadium: 'ستاد عمّان الدولي',
-          status: params.dataType === 'match_schedule' ? 'upcoming' : 'finished',
-        },
-      ],
-      usedEngine: 'smart_deterministic',
-    };
-  }
-
+  // 3) في حال كانت صورة مضغوطة ولم يتوفر مفتاح Gemini ولم يتم استخراج نص OCR بعد،
+  // لا ننشئ صفاً وهمياً ("غير واضح - غير واضح") بل نرجع 0 صفوف مع سبب تشخيصي واضح
+  parseErrors.push(
+    'الصورة لا تحتوي على طبقة نصية مضمنة؛ يرجى تفعيل مفتاح Gemini Vision API أو لصق النص المرافق للصورة.'
+  );
   return {
     rows: [],
     usedEngine: 'smart_deterministic',
+    extractedOcrText: '',
+    rawAiResponseSanitized: '[No OCR text or Gemini API key configured]',
+    jsonItemsCount: 0,
+    parseErrors,
   };
 }
 
 /**
- * إنشاء دفعة استيراد كاملة مع التحقق البرمجي المستقل وتحديد حالة المراجعة تلقائياً
+ * إنشاء دفعة استيراد كاملة مع المخطط الموحد والسجل التشخيصي للمطور (Developer Diagnostic Debug Log)
  */
 export function buildValidatedImportBatch(params: {
   dataType: SmartImportDataType;
@@ -1055,6 +1815,12 @@ export function buildValidatedImportBatch(params: {
   existingStandings: StandingRow[];
   directory?: TeamDirectoryItem[];
   rule?: CompetitionRuleConfig;
+  diagnosticMeta?: {
+    extractedText?: string;
+    rawAiResponseSanitized?: string;
+    jsonItemsCount?: number;
+    parseErrors?: string[];
+  };
 }): SmartImportBatch {
   const validatedRows = validateExtractedImportRows(
     params.extractedRows,
@@ -1063,14 +1829,56 @@ export function buildValidatedImportBatch(params: {
     params.existingMatches,
     params.existingStandings,
     params.directory || INITIAL_JORDAN_TEAMS_DIRECTORY,
-    params.rule
+    params.rule,
+    {
+      season: params.season,
+      ageCategory: params.ageCategory,
+      groupName: params.groupName,
+      roundName: params.roundName,
+    }
   );
 
-  const hasIssuesRequiringCorrection = validatedRows.some(
-    (r) => r.isUnclear || r.isDuplicate || r.hasConflict || r.unknownTeams.length > 0
-  );
+  const readyRows = validatedRows.filter((r) => r.isReadyForApproval);
+  const needsCorrectionRows = validatedRows.filter((r) => !r.isReadyForApproval);
+
+  const failedValidationFields: { rowIndex: number; field: string; reason: string }[] = [];
+  const approvalRejectionReasons: string[] = [];
+
+  validatedRows.forEach((r, idx) => {
+    r.issues
+      .filter((iss) => iss.blocking)
+      .forEach((iss) => {
+        failedValidationFields.push({
+          rowIndex: idx + 1,
+          field: iss.field,
+          reason: iss.message,
+        });
+        approvalRejectionReasons.push(`صف #${idx + 1} (${iss.field}): ${iss.message}`);
+      });
+  });
 
   const now = new Date().toISOString();
+  const diagnosticLog: ImportDiagnosticLog = {
+    timestamp: now,
+    fileTypes: params.sources.map((s) => `${s.name} (${s.format})`),
+    extractedText:
+      params.diagnosticMeta?.extractedText ||
+      params.rawPastedText ||
+      params.sources.map((s) => s.rawTextPreview || '').join('\n'),
+    rawAiResponseSanitized:
+      params.diagnosticMeta?.rawAiResponseSanitized ||
+      `[Extracted ${validatedRows.length} rows via ${params.usedEngine}]`,
+    jsonItemsCount: params.diagnosticMeta?.jsonItemsCount ?? params.extractedRows.length,
+    parsedObjectsCount: validatedRows.length,
+    readyObjectsCount: readyRows.length,
+    needsCorrectionCount: needsCorrectionRows.length,
+    failedValidationFields,
+    approvalRejectionReasons,
+    parseErrors: params.diagnosticMeta?.parseErrors || [],
+  };
+
+  const hasBlockingIssues = needsCorrectionRows.length > 0 || validatedRows.length === 0;
+
   return {
     id: `imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     dataType: params.dataType,
@@ -1079,22 +1887,21 @@ export function buildValidatedImportBatch(params: {
     ageCategory: params.ageCategory,
     groupName: params.groupName,
     roundName: params.roundName,
-    status: hasIssuesRequiringCorrection ? 'Needs Correction' : 'Pending Review',
+    status: hasBlockingIssues ? 'Needs Correction' : 'Pending Review',
     sources: params.sources,
     rawPastedText: params.rawPastedText,
     rows: validatedRows,
     usedEngine: params.usedEngine,
     createdAt: now,
     updatedAt: now,
+    diagnosticLog,
     revisions: [
       {
         id: `rev-${Date.now()}`,
         timestamp: now,
         actor: 'محرك الاستيراد الذكي',
         action: 'IMPORT_CREATED',
-        details: `تم استخراج ${validatedRows.length} صفوف (${
-          hasIssuesRequiringCorrection ? 'يحتاج مراجعة وتصحيح' : 'جاهز للمراجعة'
-        })`,
+        details: `تم اكتشاف ${validatedRows.length} عناصر (${readyRows.length} جاهزة للاعتماد، ${needsCorrectionRows.length} تحتاج تصحيحاً)`,
       },
     ],
   };
