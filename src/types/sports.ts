@@ -32,6 +32,24 @@ export type NewsCategoryTag =
   | 'match_report'
   | 'official';
 
+export type NewsEditorialType =
+  | 'confirmed_news'
+  | 'analysis'
+  | 'prediction'
+  | 'opinion'
+  | 'transfer_rumor';
+
+export type NewsVerificationStatus = 'verified' | 'pending_review' | 'needs_review' | 'rejected';
+
+export type NewsPublishStatus =
+  | 'auto_publish'
+  | 'auto_published'
+  | 'manual_published'
+  | 'review_queue'
+  | 'pending_review'
+  | 'rejected'
+  | 'draft';
+
 export interface StatPair {
   label: string;
   value: string;
@@ -57,10 +75,10 @@ export interface NewsArticle {
   publishedAt: string; // ISO string
   relatedTeamId?: string;
   relatedPlayerId?: string;
-  editorialType?: 'confirmed_news' | 'analysis' | 'prediction' | 'opinion';
-  verificationStatus?: 'verified' | 'pending_review' | 'rejected';
+  editorialType?: NewsEditorialType;
+  verificationStatus?: NewsVerificationStatus;
   confidenceScore?: number;
-  publishStatus?: 'auto_published' | 'manual_published' | 'pending_review' | 'rejected' | 'draft';
+  publishStatus?: NewsPublishStatus;
   isDemo?: boolean;
   views: number;
   statsCard?: {
@@ -259,6 +277,7 @@ export interface NewsSourceConfig {
   enabled: boolean;
   pollIntervalMinutes: number;
   lastCheckedAt?: string;
+  lastFetchedAt?: string;
   lastStatus?: 'ok' | 'error' | 'idle';
   lastError?: string;
 }

@@ -14,11 +14,13 @@ import {
   MatchItem,
   MatchStatus,
   NewsArticle,
+  NewsSourceConfig,
   SmartImportBatch,
   SportsGraphicCard,
   StandingRow,
   TeamDirectoryItem,
   TopScorer,
+  WateenAutomationSettings,
 } from '../types/sports';
 import { INITIAL_SEED_DATA } from '../data/seedData';
 import {
@@ -65,7 +67,17 @@ import {
   initializeNativeDisplay,
   initializeNotificationsAfterSplash,
 } from '../services/nativeAndroid';
-import { migrateAppStateSafely } from '../services/schemaMigrationService';
+import {
+  getDefaultAutomationSettings,
+  getDefaultNewsSources,
+  migrateAppStateSafely,
+} from '../services/schemaMigrationService';
+import {
+  NewsCollectionCycleResult,
+  processRawNewsItemForWateen,
+  RawFetchedNewsItem,
+  runNewsIntelligenceBatch,
+} from '../services/newsIntelligenceService';
 import {
   generateDeterministicGoalkeeperId,
   generateDeterministicMatchId,
@@ -165,6 +177,23 @@ interface AppDataContextValue {
     competitionId?: CompetitionId;
   }) => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
+
+  // الذكاء الإخباري ومصادر الأخبار وطابور المراجعة وإعدادات WATEEN AI
+  saveNewsSource: (source: NewsSourceConfig) => Promise<void>;
+  deleteNewsSource: (id: string) => Promise<void>;
+  toggleNewsSourceEnabled: (id: string) => Promise<void>;
+  toggleNewsSourceTrusted: (id: string) => Promise<void>;
+  updateAutomationSettings: (patch: Partial<WateenAutomationSettings>) => Promise<void>;
+  ingestManualNewsOrRss: (params: {
+    items: RawFetchedNewsItem[];
+    sourceId?: string;
+    sourceName?: string;
+    sourceTrusted?: boolean;
+  }) => Promise<{ publishedCount: number; queuedCount: number; rejectedCount: number }>;
+  runNewsIntelligenceNow: () => Promise<NewsCollectionCycleResult>;
+  updateQueuedArticle: (article: NewsArticle) => Promise<void>;
+  approveQueuedArticle: (articleId: string) => Promise<void>;
+  rejectQueuedArticle: (articleId: string, reason?: string) => Promise<void>;
 
   // إعدادات السحابة والنسخ الاحتياطي والمصادقة
   connectFirebase: (config: FirebaseCloudConfig) => Promise<boolean>;
@@ -1817,6 +1846,281 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [commitState, showToast]
   );
 
+  // ============================================================================
+  // الذكاء الإخباري (News Intelligence)، إدارة المصادر، طابور المراجعة وإعدادات WATEEN AI
+  // ============================================================================
+  const saveNewsSource = useCallback(
+    async (source: NewsSourceConfig) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => {
+        const list = prev.newsSources || getDefaultNewsSources();
+        const exists = list.some((s) => s.id === source.id);
+        const newsSources = exists
+          ? list.map((s) => (s.id === source.id ? source : s))
+          : [source, ...list];
+        return { ...prev, newsSources };
+      });
+      showToast(`تم حفظ مصدر الأخبار "${source.name}" بنجاح`, 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const deleteNewsSource = useCallback(
+    async (id: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        newsSources: (prev.newsSources || []).filter((s) => s.id !== id),
+      }));
+      showToast('تم حذف المصدر الإخباري', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const toggleNewsSourceEnabled = useCallback(
+    async (id: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        newsSources: (prev.newsSources || getDefaultNewsSources()).map((s) =>
+          s.id === id ? { ...s, enabled: !s.enabled } : s
+        ),
+      }));
+      showToast('تم تحديث حالة تفعيل المصدر', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const toggleNewsSourceTrusted = useCallback(
+    async (id: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        newsSources: (prev.newsSources || getDefaultNewsSources()).map((s) =>
+          s.id === id ? { ...s, trustedForAutoPublish: !s.trustedForAutoPublish } : s
+        ),
+      }));
+      showToast('تم تحديث درجة موثوقية المصدر للنشر التلقائي', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const updateAutomationSettings = useCallback(
+    async (patch: Partial<WateenAutomationSettings>) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        automationSettings: {
+          ...(prev.automationSettings || getDefaultAutomationSettings()),
+          ...patch,
+        },
+      }));
+      showToast('تم حفظ إعدادات محرك WATEEN AI والأتمتة بنجاح', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const ingestManualNewsOrRss = useCallback(
+    async (params: {
+      items: RawFetchedNewsItem[];
+      sourceId?: string;
+      sourceName?: string;
+      sourceTrusted?: boolean;
+    }): Promise<{ publishedCount: number; queuedCount: number; rejectedCount: number }> => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return { publishedCount: 0, queuedCount: 0, rejectedCount: 0 };
+      }
+
+      const settings = data.automationSettings || getDefaultAutomationSettings();
+      const matchedSource =
+        (data.newsSources || []).find((s) => s.id === params.sourceId) ||
+        ({
+          id: params.sourceId || 'src-manual',
+          name: params.sourceName || 'مصدر رسمي مضاف يدوياً',
+          region: 'jordan',
+          method: 'rss',
+          url: '',
+          trustedForAutoPublish: Boolean(params.sourceTrusted),
+          enabled: true,
+          pollIntervalMinutes: 30,
+        } as NewsSourceConfig);
+
+      const published: NewsArticle[] = [];
+      const queued: NewsArticle[] = [];
+      let rejectedCount = 0;
+
+      const runningExisting = [...data.articles];
+      const runningQueued = [...(data.reviewQueueArticles || [])];
+
+      for (const rawItem of params.items) {
+        const res = processRawNewsItemForWateen({
+          rawItem,
+          source: matchedSource,
+          settings,
+          existingArticles: runningExisting,
+          queuedArticles: runningQueued,
+        });
+
+        if (res.decision.publishStatus === 'auto_publish') {
+          published.push(res.article);
+          runningExisting.push(res.article);
+        } else if (res.decision.publishStatus === 'review_queue') {
+          queued.push(res.article);
+          runningQueued.push(res.article);
+        } else {
+          rejectedCount += 1;
+        }
+      }
+
+      if (published.length > 0 || queued.length > 0) {
+        const auditEntry: ImportRevisionEntry = {
+          id: `news-ing-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actor: 'الذكاء الإخباري WATEEN AI',
+          action: 'NEWS_INTELLIGENCE_INGEST',
+          details: `معالجة ${params.items.length} عناصر من (${matchedSource.name}): نُشر تلقائياً ${published.length}، أُرسل للمراجعة ${queued.length}، رُفض للتكرار/النقص ${rejectedCount}.`,
+        };
+        await commitState((prev) => ({
+          ...prev,
+          articles: [...published, ...prev.articles],
+          reviewQueueArticles: [...queued, ...(prev.reviewQueueArticles || [])],
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+        }));
+      }
+
+      showToast(
+        `النتيجة: نُشر ${published.length} • في طابور المراجعة ${queued.length} • مكرر/مرفوض ${rejectedCount}`,
+        published.length > 0 ? 'emerald' : 'amber'
+      );
+
+      return {
+        publishedCount: published.length,
+        queuedCount: queued.length,
+        rejectedCount,
+      };
+    },
+    [commitState, data.articles, data.automationSettings, data.newsSources, data.reviewQueueArticles, isAdminUnlocked, showToast]
+  );
+
+  const runNewsIntelligenceNow = useCallback(async (): Promise<NewsCollectionCycleResult> => {
+    const sources = data.newsSources || getDefaultNewsSources();
+    const settings = data.automationSettings || getDefaultAutomationSettings();
+    const result = await runNewsIntelligenceBatch({
+      sources,
+      existingArticles: data.articles,
+      queuedArticles: data.reviewQueueArticles || [],
+      settings,
+    });
+
+    const auditEntry: ImportRevisionEntry = {
+      id: `news-run-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actor: 'جامع الأخبار WATEEN AI',
+      action: 'NEWS_COLLECTION_CYCLE',
+      details: `دورة فحص ${result.sourceUpdates.length} مصادر: نُشر ${result.published.length}، للمراجعة ${result.queued.length}، مرفوض ${result.rejected.length}.`,
+    };
+
+    await commitState((prev) => {
+      const updatedSources = (prev.newsSources || getDefaultNewsSources()).map((src) => {
+        const upd = result.sourceUpdates.find((u) => u.id === src.id);
+        return upd ? { ...src, ...upd } : src;
+      });
+      return {
+        ...prev,
+        newsSources: updatedSources,
+        articles: [...result.published, ...prev.articles],
+        reviewQueueArticles: [...result.queued, ...(prev.reviewQueueArticles || [])],
+        auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+      };
+    });
+
+    const failedSources = result.sourceUpdates.filter((u) => u.lastStatus === 'error').length;
+    showToast(
+      failedSources > 0 && result.published.length === 0 && result.queued.length === 0
+        ? `تعذر الجلب المباشر من ${failedSources} مصادر من المتصفح (بسبب CORS/الشبكة) — يمكنك اللصق المباشر لخلاصة RSS أو التفعيل عبر Cloud Functions`
+        : `اكتملت دورة الأخبار: نُشر ${result.published.length} • للمراجعة ${result.queued.length} • مرفوض ${result.rejected.length}`,
+      result.published.length + result.queued.length > 0 ? 'emerald' : 'amber'
+    );
+
+    return result;
+  }, [commitState, data.articles, data.automationSettings, data.newsSources, data.reviewQueueArticles, showToast]);
+
+  const updateQueuedArticle = useCallback(
+    async (article: NewsArticle) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        reviewQueueArticles: (prev.reviewQueueArticles || []).map((q) =>
+          q.id === article.id ? article : q
+        ),
+      }));
+      showToast('تم حفظ تعديل مسودة الخبر في طابور المراجعة', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const approveQueuedArticle = useCallback(
+    async (articleId: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => {
+        const queue = prev.reviewQueueArticles || [];
+        const target = queue.find((q) => q.id === articleId);
+        if (!target) return prev;
+        const approvedArticle: NewsArticle = {
+          ...target,
+          publishStatus: 'auto_publish',
+          verificationStatus: 'verified',
+          isDemo: false,
+          publishedAt: new Date().toISOString(),
+        };
+        const exists = prev.articles.some((a) => a.id === approvedArticle.id);
+        const articles = exists
+          ? prev.articles.map((a) => (a.id === approvedArticle.id ? approvedArticle : a))
+          : [approvedArticle, ...prev.articles];
+        const auditEntry: ImportRevisionEntry = {
+          id: `aud-q-app-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actor: 'مدير النظام',
+          action: 'APPROVE_QUEUED_NEWS',
+          details: `اعتماد ونشر خبر من طابور المراجعة: "${approvedArticle.title}" (المصدر: ${approvedArticle.sourceName || 'غير محدد'})`,
+        };
+        return {
+          ...prev,
+          articles,
+          reviewQueueArticles: queue.filter((q) => q.id !== articleId),
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+        };
+      });
+      showToast('تم اعتماد الخبر ونشره فوراً في التطبيق', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const rejectQueuedArticle = useCallback(
+    async (articleId: string, reason = 'غير مناسب للنشر') => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => {
+        const queue = prev.reviewQueueArticles || [];
+        const target = queue.find((q) => q.id === articleId);
+        const auditEntry: ImportRevisionEntry = {
+          id: `aud-q-rej-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actor: 'مدير النظام',
+          action: 'REJECT_QUEUED_NEWS',
+          details: `رفض خبر من طابور المراجعة: "${target?.title || articleId}" — السبب: ${reason}`,
+        };
+        return {
+          ...prev,
+          reviewQueueArticles: queue.filter((q) => q.id !== articleId),
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+        };
+      });
+      showToast('تم رفض الخبر وإزالته من طابور المراجعة', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
   const resetToDemoData = useCallback(async () => {
     await commitState((prev) => {
       const { state: freshSeed } = migrateAppStateSafely(null, {
@@ -1895,6 +2199,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         exportBackupJson,
         importBackupJson,
         resetToDemoData,
+        saveNewsSource,
+        deleteNewsSource,
+        toggleNewsSourceEnabled,
+        toggleNewsSourceTrusted,
+        updateAutomationSettings,
+        ingestManualNewsOrRss,
+        runNewsIntelligenceNow,
+        updateQueuedArticle,
+        approveQueuedArticle,
+        rejectQueuedArticle,
       }}
     >
       {children}

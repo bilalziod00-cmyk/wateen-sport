@@ -51,6 +51,47 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /import_jobs/{jobId} {
+      allow read, write: if isAdmin();
+    }
+
+    // المجموعات الجديدة لمنصة WATEEN SPORT AI (الأخبار، المصادر، طابور المراجعة، الإصابات، إحصائيات اللاعبين، مهام AI، الإعدادات)
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /news_sources/{sourceId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /review_queue/{itemId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /injuries/{injuryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /player_statistics/{statId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /standings_history/{entryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /ai_tasks/{taskId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /app_settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
     match /audit_logs/{logId} {
       allow read: if isAdmin();
       allow create: if isAdmin();

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   BellRing,
+  Bot,
   Calendar,
   Cloud,
   Flame,
@@ -22,10 +23,12 @@ import { AdminLiveStreamManager } from './admin/AdminLiveStreamManager';
 import { AdminCloudSettings } from './admin/AdminCloudSettings';
 import { AdminSmartImportCenter } from './admin/AdminSmartImportCenter';
 import { AdminAutoDesignStudio } from './admin/AdminAutoDesignStudio';
+import { AdminNewsSourcesAndQueue } from './admin/AdminNewsSourcesAndQueue';
 import { isLiveMatchStatus } from '../utils/matchStatus';
 
 type AdminTab =
   | 'smart_import'
+  | 'news_intel'
   | 'news'
   | 'live'
   | 'matches'
@@ -57,6 +60,7 @@ export const AdminDashboardPage: React.FC = () => {
   const pendingImportsCount = (data.importBatches || []).filter(
     (b) => b.status === 'Pending Review' || b.status === 'Needs Correction'
   ).length;
+  const reviewQueueCount = (data.reviewQueueArticles || []).length;
 
   const tabs: { id: AdminTab; label: string; icon: React.ElementType; highlight?: boolean }[] = [
     {
@@ -64,7 +68,12 @@ export const AdminDashboardPage: React.FC = () => {
       label: `الإدخال الذكي AI${pendingImportsCount ? ` (${pendingImportsCount})` : ''}`,
       icon: Sparkles,
     },
-    { id: 'news', label: 'الأخبار والذكاء AI', icon: Newspaper },
+    {
+      id: 'news_intel',
+      label: `الذكاء الإخباري${reviewQueueCount ? ` (${reviewQueueCount})` : ''}`,
+      icon: Bot,
+    },
+    { id: 'news', label: 'الأخبار والتحرير', icon: Newspaper },
     {
       id: 'live',
       label: `البث المباشر${activeStreamsCount ? ` (${activeStreamsCount})` : ''}`,
@@ -163,6 +172,7 @@ export const AdminDashboardPage: React.FC = () => {
       {/* القسم النشط */}
       <div>
         {tab === 'smart_import' && <AdminSmartImportCenter />}
+        {tab === 'news_intel' && <AdminNewsSourcesAndQueue />}
         {tab === 'news' && <AdminNewsManager />}
         {tab === 'live' && <AdminLiveStreamManager />}
         {tab === 'matches' && <AdminMatchesManager />}

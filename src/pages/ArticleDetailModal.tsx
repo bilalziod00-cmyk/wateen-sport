@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { ArrowRight, BarChart3, Clock, Eye, Flame, Radio, User } from 'lucide-react';
+import { ArrowRight, BarChart3, Clock, ExternalLink, Eye, Flame, Globe, Radio, User } from 'lucide-react';
 import { MatchItem, NewsArticle } from '../types/sports';
 import { COMPETITIONS, NEWS_TAG_LABELS } from '../constants/competitions';
 import { formatAmmanDateTime } from '../utils/ammanTime';
 import { ShareBar } from '../components/ShareSheet';
 import { useAppData } from '../context/AppDataContext';
+import { EDITORIAL_TYPE_LABELS } from '../services/newsIntelligenceService';
 
 interface ArticleDetailModalProps {
   article: NewsArticle;
@@ -65,6 +66,20 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
             <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${tag.color}`}>
               {tag.label}
             </span>
+            {article.editorialType && EDITORIAL_TYPE_LABELS[article.editorialType] && (
+              <span
+                className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${
+                  EDITORIAL_TYPE_LABELS[article.editorialType].color
+                }`}
+              >
+                {EDITORIAL_TYPE_LABELS[article.editorialType].label}
+              </span>
+            )}
+            {article.isDemo && (
+              <span className="px-2.5 py-1 rounded-lg border text-xs font-bold bg-amber-500/20 text-amber-200 border-amber-400/40">
+                محتوى أولي للعرض
+              </span>
+            )}
           </div>
         </div>
 
@@ -87,6 +102,23 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
               <Eye className="w-3.5 h-3.5 text-slate-500" />
               {article.views.toLocaleString('ar-JO')} مشاهدة
             </span>
+            {article.sourceName && (
+              <span className="inline-flex items-center gap-1.5 text-sky-300 font-bold">
+                <Globe className="w-3.5 h-3.5" />
+                المصدر: {article.sourceName}
+                {article.sourceUrl && (
+                  <a
+                    href={article.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-0.5 text-emerald-300 hover:underline mr-1"
+                  >
+                    الرابط الأصلي
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </span>
+            )}
           </div>
 
           <p className="text-sm sm:text-base font-bold text-emerald-100/95 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 leading-relaxed">
