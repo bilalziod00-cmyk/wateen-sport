@@ -65,6 +65,16 @@ import {
   initializeNativeDisplay,
   initializeNotificationsAfterSplash,
 } from '../services/nativeAndroid';
+import { migrateAppStateSafely } from '../services/schemaMigrationService';
+import {
+  generateDeterministicGoalkeeperId,
+  generateDeterministicMatchId,
+  generateDeterministicNewsId,
+  generateDeterministicPlayerId,
+  generateDeterministicStandingId,
+  generateDeterministicTeamId,
+} from '../utils/deterministicIds';
+import { isLiveMatchStatus } from '../utils/matchStatus';
 
 const ADMIN_SESSION_KEY = 'wateen_admin_session_v1';
 const LAST_READ_NOTIF_KEY = 'wateen_last_read_notif_v1';
@@ -177,36 +187,28 @@ function loadInitialLocalState(): AppDataState {
   try {
     const raw = localStorage.getItem(LOCAL_DATA_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as AppDataState;
-      if (parsed && Array.isArray(parsed.articles) && Array.isArray(parsed.matches)) {
-        return {
-          ...INITIAL_SEED_DATA,
-          ...parsed,
-          liveStreams: Array.isArray(parsed.liveStreams)
-            ? parsed.liveStreams
-            : INITIAL_SEED_DATA.liveStreams,
-          goalkeepers: Array.isArray(parsed.goalkeepers)
-            ? parsed.goalkeepers
-            : INITIAL_SEED_DATA.goalkeepers,
-          teamsDirectory: Array.isArray(parsed.teamsDirectory)
-            ? parsed.teamsDirectory
-            : INITIAL_JORDAN_TEAMS_DIRECTORY,
-          competitionRules: parsed.competitionRules
-            ? { ...getDefaultCompetitionRules(), ...parsed.competitionRules }
-            : getDefaultCompetitionRules(),
-          customCompetitions: Array.isArray(parsed.customCompetitions)
-            ? parsed.customCompetitions
-            : [],
-          importBatches: Array.isArray(parsed.importBatches) ? parsed.importBatches : [],
-          auditLogs: Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [],
-          adminPin: parsed.adminPin || INITIAL_SEED_DATA.adminPin,
-        };
+      const parsed = JSON.parse(raw) as Partial<AppDataState>;
+      if (parsed && (Array.isArray(parsed.articles) || Array.isArray(parsed.matches))) {
+        const { state, didMigrate } = migrateAppStateSafely(parsed, INITIAL_SEED_DATA);
+        if (didMigrate) {
+          // حفظ نسخة احتياطية كاملة للحالة القديمة قبل الترقية
+          try {
+            createPreMigrationBackupSnapshot({
+              ...INITIAL_SEED_DATA,
+              ...parsed,
+            } as AppDataState);
+            localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(state));
+          } catch {
+            // ignore storage quota errors safely
+          }
+        }
+        return state;
       }
     }
   } catch {
-    // fallback to seed
+    // fallback to seed safely
   }
-  return INITIAL_SEED_DATA;
+  return migrateAppStateSafely(null, INITIAL_SEED_DATA).state;
 }
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -383,9 +385,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const rawLocal = localStorage.getItem(LOCAL_DATA_KEY);
     if (!rawLocal) {
       loadStateFromIndexedDB<AppDataState>('main_app_state').then((idbState) => {
-        if (idbState && Array.isArray(idbState.matches)) {
+        if (idbState && (Array.isArray(idbState.matches) || Array.isArray(idbState.articles))) {
+          const { state: migratedIdb } = migrateAppStateSafely(idbState, INITIAL_SEED_DATA);
           setData((prev) => {
-            const merged = mergeStatesWithoutDuplication(prev, idbState);
+            const merged = mergeStatesWithoutDuplication(prev, migratedIdb);
             try {
               localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(merged));
             } catch {
@@ -509,9 +512,22 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     async (article: NewsArticle) => {
       await commitState((prev) => {
         const exists = prev.articles.some((a) => a.id === article.id);
-        const articles = exists
-          ? prev.articles.map((a) => (a.id === article.id ? article : a))
-          : [article, ...prev.articles];
+        const resolvedId =
+          exists || (article.id && !/^art-\d+/.test(article.id))
+            ? article.id
+            : generateDeterministicNewsId({
+                sourceUrl: article.sourceUrl,
+                originalTitle: article.originalTitle || article.title,
+              });
+        const normalizedArticle: NewsArticle = {
+          ...article,
+          id: resolvedId,
+          isDemo: false,
+        };
+        const existsAfterId = prev.articles.some((a) => a.id === normalizedArticle.id);
+        const articles = existsAfterId
+          ? prev.articles.map((a) => (a.id === normalizedArticle.id ? normalizedArticle : a))
+          : [normalizedArticle, ...prev.articles];
         return { ...prev, articles };
       });
       showToast('تم حفظ ونشر الخبر فوراً', 'emerald');
@@ -575,7 +591,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
 
-        const approvedMatch: MatchItem = { ...match, isApproved: true };
+        const deterministicId =
+          previousMatch || (match.id && !/^m-\d+/.test(match.id))
+            ? match.id
+            : generateDeterministicMatchId({
+                competitionId: match.competitionId,
+                season: match.season,
+                round: match.round,
+                homeTeam: match.homeTeam,
+                awayTeam: match.awayTeam,
+              });
+
+        const approvedMatch: MatchItem = {
+          ...match,
+          id: deterministicId,
+          homeTeamId: match.homeTeamId || generateDeterministicTeamId(match.homeTeam),
+          awayTeamId: match.awayTeamId || generateDeterministicTeamId(match.awayTeam),
+          isApproved: true,
+          isDemo: false,
+        };
         const exists = prev.matches.some((m) => m.id === approvedMatch.id);
         const matches = exists
           ? prev.matches.map((m) => (m.id === approvedMatch.id ? approvedMatch : m))
@@ -691,7 +725,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const updatedMatch: MatchItem = {
           ...previousMatch,
           status,
-          liveMinute: status === 'live' ? liveMinute ?? previousMatch.liveMinute ?? 1 : undefined,
+          liveMinute:
+            isLiveMatchStatus(status) && status !== 'halftime'
+              ? liveMinute ?? previousMatch.liveMinute ?? 1
+              : undefined,
         };
         const matches = prev.matches.map((m) => (m.id === id ? updatedMatch : m));
         const standings =
@@ -721,9 +758,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       await commitState((prev) => {
         const exists = prev.standings.some((s) => s.id === row.id);
-        const rawStandings = exists
-          ? prev.standings.map((s) => (s.id === row.id ? row : s))
-          : [...prev.standings, row];
+        const resolvedId =
+          exists || (row.id && !/^st-\d+/.test(row.id))
+            ? row.id
+            : generateDeterministicStandingId({
+                competitionId: row.competitionId,
+                season: row.season,
+                groupName: row.groupName,
+                teamName: row.teamName,
+              });
+        const normalizedRow: StandingRow = {
+          ...row,
+          id: resolvedId,
+          teamId: row.teamId || generateDeterministicTeamId(row.teamName),
+          isDemo: false,
+        };
+        const existsAfterId = prev.standings.some((s) => s.id === normalizedRow.id);
+        const rawStandings = existsAfterId
+          ? prev.standings.map((s) => (s.id === normalizedRow.id ? normalizedRow : s))
+          : [...prev.standings, normalizedRow];
 
         const compRows = rawStandings.filter((s) => s.competitionId === row.competitionId);
         const otherRows = rawStandings.filter((s) => s.competitionId !== row.competitionId);
@@ -757,9 +810,24 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!isAdminUnlocked) return;
       await commitState((prev) => {
         const exists = prev.scorers.some((s) => s.id === scorer.id);
-        const scorers = exists
-          ? prev.scorers.map((s) => (s.id === scorer.id ? scorer : s))
-          : [...prev.scorers, scorer];
+        const resolvedId =
+          exists || (scorer.id && !/^sc-\d+/.test(scorer.id))
+            ? scorer.id
+            : generateDeterministicPlayerId({
+                competitionId: scorer.competitionId,
+                playerName: scorer.playerName,
+                teamName: scorer.teamName,
+              });
+        const normalizedScorer: TopScorer = {
+          ...scorer,
+          id: resolvedId,
+          teamId: scorer.teamId || generateDeterministicTeamId(scorer.teamName),
+          isDemo: false,
+        };
+        const existsAfterId = prev.scorers.some((s) => s.id === normalizedScorer.id);
+        const scorers = existsAfterId
+          ? prev.scorers.map((s) => (s.id === normalizedScorer.id ? normalizedScorer : s))
+          : [...prev.scorers, normalizedScorer];
         return { ...prev, scorers };
       });
       showToast('تم حفظ بيانات الهداف بنجاح', 'emerald');
@@ -785,9 +853,24 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await commitState((prev) => {
         const list = prev.goalkeepers || [];
         const exists = list.some((g) => g.id === gk.id);
-        const goalkeepers = exists
-          ? list.map((g) => (g.id === gk.id ? gk : g))
-          : [...list, gk];
+        const resolvedId =
+          exists || (gk.id && !/^gk-\d+/.test(gk.id))
+            ? gk.id
+            : generateDeterministicGoalkeeperId({
+                competitionId: gk.competitionId,
+                playerName: gk.playerName,
+                teamName: gk.teamName,
+              });
+        const normalizedGk: GoalkeeperStat = {
+          ...gk,
+          id: resolvedId,
+          teamId: gk.teamId || generateDeterministicTeamId(gk.teamName),
+          isDemo: false,
+        };
+        const existsAfterId = list.some((g) => g.id === normalizedGk.id);
+        const goalkeepers = existsAfterId
+          ? list.map((g) => (g.id === normalizedGk.id ? normalizedGk : g))
+          : [...list, normalizedGk];
         return { ...prev, goalkeepers };
       });
       showToast('تم حفظ إحصائيات حارس المرمى بنجاح', 'emerald');
@@ -878,7 +961,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }): Promise<TeamDirectoryItem> => {
       const cleanName = team.name.trim();
       const newTeam: TeamDirectoryItem = {
-        id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: generateDeterministicTeamId(cleanName),
         name: cleanName,
         shortName: (team.shortName || cleanName.replace(/^نادي\s+/, '')).slice(0, 12),
         color: team.color || '#10B981',
@@ -1015,7 +1098,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const norm = normalizeArabicTeamName(clean);
           if (!nextDirectory.some((t) => normalizeArabicTeamName(t.name) === norm)) {
             nextDirectory.push({
-              id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              id: generateDeterministicTeamId(clean),
               name: clean,
               shortName: clean.replace(/^نادي\s+/, '').slice(0, 12),
               color: '#10B981',
@@ -1046,10 +1129,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               id:
                 existingIdx >= 0
                   ? compStandings[existingIdx].id
-                  : `st-${targetBatch.competitionId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  : generateDeterministicStandingId({
+                      competitionId: targetBatch.competitionId,
+                      season: targetBatch.season,
+                      groupName: targetBatch.groupName,
+                      teamName: tName,
+                    }),
               competitionId: targetBatch.competitionId,
               season: targetBatch.season,
               groupName: targetBatch.groupName,
+              teamId: generateDeterministicTeamId(tName),
               teamName: tName,
               shortName:
                 existingIdx >= 0
@@ -1064,6 +1153,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               goalsFor: Number(r.goalsFor) || 0,
               goalsAgainst: Number(r.goalsAgainst) || 0,
               points: Number(r.points) || 0,
+              isDemo: false,
               form:
                 existingIdx >= 0 && compStandings[existingIdx].form.length > 0
                   ? compStandings[existingIdx].form
@@ -1096,19 +1186,45 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ensureTeamInDirectory(hTeam);
             ensureTeamInDirectory(aTeam);
 
-            const newMatch: MatchItem = {
-              id: `m-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            const effectiveSeason = r.season || targetBatch.season;
+            const effectiveRound = String(
+              r.roundNumber || r.round || targetBatch.roundName || 'الجولة 1'
+            );
+            const deterministicMatchId = generateDeterministicMatchId({
               competitionId: targetBatch.competitionId,
-              season: r.season || targetBatch.season,
+              season: effectiveSeason,
+              round: effectiveRound,
+              homeTeam: hTeam,
+              awayTeam: aTeam,
+            });
+            const existingMatch =
+              nextMatches.find((m) => m.id === deterministicMatchId) ||
+              isDuplicateMatchItem(
+                {
+                  competitionId: targetBatch.competitionId,
+                  round: effectiveRound,
+                  homeTeam: hTeam,
+                  awayTeam: aTeam,
+                  season: effectiveSeason,
+                },
+                nextMatches
+              );
+
+            const newMatch: MatchItem = {
+              id: existingMatch?.id || deterministicMatchId,
+              competitionId: targetBatch.competitionId,
+              season: effectiveSeason,
               ageCategory: r.ageCategory || targetBatch.ageCategory,
               groupName: r.groupName || targetBatch.groupName,
-              round: String(r.roundNumber || r.round || targetBatch.roundName || 'الجولة 1'),
+              round: effectiveRound,
+              homeTeamId: generateDeterministicTeamId(hTeam),
+              awayTeamId: generateDeterministicTeamId(aTeam),
               homeTeam: hTeam,
               homeShort: hTeam.replace(/^نادي\s+/, '').slice(0, 10),
-              homeColor: '#10B981',
+              homeColor: existingMatch?.homeColor || '#10B981',
               awayTeam: aTeam,
               awayShort: aTeam.replace(/^نادي\s+/, '').slice(0, 10),
-              awayColor: '#38BDF8',
+              awayColor: existingMatch?.awayColor || '#38BDF8',
               homeScore: Number(r.homeScore) || 0,
               awayScore: Number(r.awayScore) || 0,
               status:
@@ -1118,18 +1234,22 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               kickoffIso:
                 r.matchDate && !Number.isNaN(new Date(r.matchDate).getTime())
                   ? new Date(r.matchDate).toISOString()
-                  : new Date().toISOString(),
-              stadium: String(r.stadium ?? ''),
+                  : existingMatch?.kickoffIso || new Date().toISOString(),
+              stadium: String(r.stadium ?? existingMatch?.stadium ?? ''),
               isApproved: true,
+              isDemo: false,
               importBatchId: targetBatch.id,
-              events: [],
+              events: existingMatch?.events || [],
+              stats: existingMatch?.stats,
             };
 
-            nextMatches = [newMatch, ...nextMatches];
-            if (newMatch.status === 'finished') {
+            nextMatches = existingMatch
+              ? nextMatches.map((m) => (m.id === existingMatch.id ? newMatch : m))
+              : [newMatch, ...nextMatches];
+            if (newMatch.status === 'finished' || existingMatch?.status === 'finished') {
               nextStandings = applyApprovedMatchResultToStandings(
                 newMatch,
-                null,
+                existingMatch || null,
                 nextStandings,
                 nextMatches,
                 rule,
@@ -1157,15 +1277,21 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               id:
                 existingIdx >= 0
                   ? nextScorers[existingIdx].id
-                  : `sc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  : generateDeterministicPlayerId({
+                      competitionId: targetBatch.competitionId,
+                      playerName: pName,
+                      teamName: tName || 'غير محدد',
+                    }),
               competitionId: targetBatch.competitionId,
               season: targetBatch.season,
+              teamId: generateDeterministicTeamId(tName || 'غير محدد'),
               playerName: pName,
               teamName: tName || 'غير محدد',
               teamColor: '#10B981',
               goals: Number(r.goals) || 0,
               assists: Number(r.assists) || 0,
               matches: Number(r.matches) || 1,
+              isDemo: false,
             };
             if (existingIdx >= 0) {
               nextScorers[existingIdx] = scorerObj;
@@ -1189,15 +1315,21 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               id:
                 existingIdx >= 0
                   ? nextGoalkeepers[existingIdx].id
-                  : `gk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  : generateDeterministicGoalkeeperId({
+                      competitionId: targetBatch.competitionId,
+                      playerName: pName,
+                      teamName: tName || 'غير محدد',
+                    }),
               competitionId: targetBatch.competitionId,
               season: targetBatch.season,
+              teamId: generateDeterministicTeamId(tName || 'غير محدد'),
               playerName: pName,
               teamName: tName || 'غير محدد',
               teamColor: '#10B981',
               matches: Number(r.matches) || 1,
               cleanSheets: Number(r.cleanSheets) || 0,
               goalsConceded: Number(r.goalsConceded) || 0,
+              isDemo: false,
             };
             if (existingIdx >= 0) {
               nextGoalkeepers[existingIdx] = gkObj;
@@ -1668,13 +1800,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const importBackupJson = useCallback(
     async (jsonText: string) => {
       try {
-        const parsed = JSON.parse(jsonText) as AppDataState;
+        const parsed = JSON.parse(jsonText) as Partial<AppDataState>;
         if (!Array.isArray(parsed.articles) || !Array.isArray(parsed.matches)) {
           showToast('ملف النسخة الاحتياطية غير صالح', 'crimson');
           return false;
         }
-        await commitState(() => ({ ...INITIAL_SEED_DATA, ...parsed }));
-        showToast('تم استعادة النسخة الاحتياطية بنجاح', 'emerald');
+        const { state: migrated } = migrateAppStateSafely(parsed, INITIAL_SEED_DATA);
+        await commitState(() => migrated);
+        showToast('تم استعادة النسخة الاحتياطية وترحيلها بأمان بنجاح', 'emerald');
         return true;
       } catch {
         showToast('صيغة JSON غير صحيحة', 'crimson');
@@ -1685,11 +1818,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const resetToDemoData = useCallback(async () => {
-    await commitState((prev) => ({
-      ...INITIAL_SEED_DATA,
-      adminPin: prev.adminPin,
-    }));
-    showToast('تمت استعادة البيانات الرياضية الأردنية الافتراضية', 'amber');
+    await commitState((prev) => {
+      const { state: freshSeed } = migrateAppStateSafely(null, {
+        ...INITIAL_SEED_DATA,
+        adminPin: prev.adminPin,
+      });
+      return freshSeed;
+    });
+    showToast('تمت استعادة البيانات الرياضية الأردنية الأولية للعرض', 'amber');
   }, [commitState, showToast]);
 
   return (

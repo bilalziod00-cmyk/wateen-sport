@@ -3,6 +3,7 @@ import { Clock, MapPin, Radio, Tv } from 'lucide-react';
 import { MatchItem } from '../types/sports';
 import { COMPETITIONS } from '../constants/competitions';
 import { formatAmmanDate, formatAmmanTime } from '../utils/ammanTime';
+import { getMatchStatusArabicLabel, isLiveMatchStatus } from '../utils/matchStatus';
 import { TeamCrest } from './TeamCrest';
 
 interface MatchCardProps {
@@ -13,7 +14,7 @@ interface MatchCardProps {
 
 export const MatchCard: React.FC<MatchCardProps> = ({ match, compact = false, onSelect }) => {
   const comp = COMPETITIONS[match.competitionId];
-  const isLive = match.status === 'live';
+  const isLive = isLiveMatchStatus(match.status);
   const isFinished = match.status === 'finished';
   const isPostponed = match.status === 'postponed';
   const isCancelled = match.status === 'cancelled';
@@ -37,12 +38,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, compact = false, on
           />
           <span className="text-[11px] font-bold text-slate-300 truncate">{comp.shortName}</span>
           <span className="text-[10px] text-slate-500">• {match.round}</span>
+          {match.isDemo && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
+              عرض أولي
+            </span>
+          )}
         </div>
 
         {isLive ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse-live" />
-            مباشر {match.liveMinute ? `${match.liveMinute}'` : ''}
+            {getMatchStatusArabicLabel(match.status, match.liveMinute)}
           </span>
         ) : isFinished ? (
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-white/10 shrink-0">

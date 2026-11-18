@@ -12,6 +12,10 @@ import {
   getDefaultCompetitionRules,
   INITIAL_JORDAN_TEAMS_DIRECTORY,
 } from '../constants/competitions';
+import {
+  generateDeterministicStandingId,
+  generateDeterministicTeamId,
+} from './deterministicIds';
 
 export const UNCLEAR_VALUE_MARKER = 'غير واضح';
 
@@ -515,11 +519,20 @@ export function recalculateStandingsForCompetition(
       lost * activeRule.pointsLoss -
       (entry.pointsDeducted || 0);
 
+    const effectiveGroup = entry.groupName || prev?.groupName || activeRule.groups[0] || 'الدوري العام';
     computedRows.push({
-      id: prev?.id || `st-${competitionId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id:
+        prev?.id ||
+        generateDeterministicStandingId({
+          competitionId,
+          season: activeRule.season,
+          groupName: effectiveGroup,
+          teamName: entry.teamName,
+        }),
       competitionId,
       season: activeRule.season,
-      groupName: entry.groupName || prev?.groupName || activeRule.groups[0] || 'الدوري العام',
+      groupName: effectiveGroup,
+      teamId: prev?.teamId || generateDeterministicTeamId(entry.teamName),
       teamName: entry.teamName,
       shortName: entry.shortName,
       teamColor: entry.teamColor,
@@ -531,6 +544,7 @@ export function recalculateStandingsForCompetition(
       goalsAgainst,
       points: Math.max(0, rawPoints),
       pointsDeducted: entry.pointsDeducted,
+      isDemo: prev?.isDemo === true ? true : false,
       form:
         entry.form.length > 0
           ? entry.form.slice(-5)
@@ -576,11 +590,18 @@ export function applyApprovedMatchResultToStandings(
     let found = compRows.find((r) => normalizeArabicTeamName(r.teamName) === norm);
     if (!found) {
       const resolved = resolveTeamFromDirectory(teamName, competitionId, directory, compRows);
+      const effectiveGroup = newMatch.groupName || activeRule.groups[0] || 'الدوري العام';
       found = {
-        id: `st-${competitionId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: generateDeterministicStandingId({
+          competitionId,
+          season: activeRule.season,
+          groupName: effectiveGroup,
+          teamName: resolved.canonicalName,
+        }),
         competitionId,
         season: activeRule.season,
-        groupName: newMatch.groupName || activeRule.groups[0] || 'الدوري العام',
+        groupName: effectiveGroup,
+        teamId: generateDeterministicTeamId(resolved.canonicalName),
         teamName: resolved.canonicalName,
         shortName: shortName || resolved.shortName,
         teamColor: color || resolved.color,
@@ -591,6 +612,7 @@ export function applyApprovedMatchResultToStandings(
         goalsFor: 0,
         goalsAgainst: 0,
         points: 0,
+        isDemo: newMatch.isDemo === true ? true : false,
         form: [],
       };
       compRows.push(found);

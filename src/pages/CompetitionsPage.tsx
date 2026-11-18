@@ -51,7 +51,14 @@ export const CompetitionsPage: React.FC<CompetitionsPageProps> = ({
     for (const m of data.matches) {
       map[m.competitionId] = map[m.competitionId] || { matches: 0, live: 0, news: 0 };
       map[m.competitionId].matches += 1;
-      if (m.status === 'live') map[m.competitionId].live += 1;
+      if (
+        m.status === 'live' ||
+        m.status === 'first_half' ||
+        m.status === 'halftime' ||
+        m.status === 'second_half'
+      ) {
+        map[m.competitionId].live += 1;
+      }
     }
     for (const a of data.articles) {
       map[a.competitionId] = map[a.competitionId] || { matches: 0, live: 0, news: 0 };

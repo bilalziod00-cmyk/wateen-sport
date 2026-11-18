@@ -14,6 +14,7 @@ import { useAppData } from '../context/AppDataContext';
 import { COMPETITIONS, NEWS_TAG_LABELS, YOUTH_COMPETITION_IDS } from '../constants/competitions';
 import { CompetitionId, MatchItem, NewsArticle, NewsCategoryTag } from '../types/sports';
 import { formatRelativeAmman } from '../utils/ammanTime';
+import { MATCH_STATUS_SORT_WEIGHT } from '../utils/matchStatus';
 import { MatchCard } from '../components/MatchCard';
 import { SportsCardItem } from '../components/SportsCardItem';
 import { LiveStreamPlayer } from '../components/LiveStreamPlayer';
@@ -66,10 +67,11 @@ export const HomePage: React.FC<HomePageProps> = ({
   );
 
   const featuredMatches = useMemo(() => {
-    const order = { live: 0, upcoming: 1, finished: 2, postponed: 3, cancelled: 4 };
     return [...data.matches]
       .sort((a, b) => {
-        if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+        if (MATCH_STATUS_SORT_WEIGHT[a.status] !== MATCH_STATUS_SORT_WEIGHT[b.status]) {
+          return MATCH_STATUS_SORT_WEIGHT[a.status] - MATCH_STATUS_SORT_WEIGHT[b.status];
+        }
         return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
       })
       .slice(0, 6);
@@ -387,6 +389,11 @@ export const HomePage: React.FC<HomePageProps> = ({
                           >
                             {comp.shortName}
                           </span>
+                          {art.isDemo && (
+                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/35 backdrop-blur-md">
+                              محتوى أولي
+                            </span>
+                          )}
                         </div>
 
                         {art.statsCard && (

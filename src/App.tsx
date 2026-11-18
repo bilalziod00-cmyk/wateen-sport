@@ -18,6 +18,7 @@ import { ArticleDetailModal } from './pages/ArticleDetailModal';
 import { MatchDetailModal } from './pages/MatchDetailModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { CinematicSplashScreen } from './components/CinematicSplashScreen';
+import { isLiveMatchStatus } from './utils/matchStatus';
 
 const WateenShell: React.FC = () => {
   const {
@@ -44,7 +45,7 @@ const WateenShell: React.FC = () => {
     ? data.matches.find((m) => m.id === selectedMatchId) || null
     : null;
 
-  const liveMatchesCount = data.matches.filter((m) => m.status === 'live').length;
+  const liveMatchesCount = data.matches.filter((m) => isLiveMatchStatus(m.status)).length;
 
   const handleOpenCompetition = (id: CompetitionId) => {
     setSelectedCompetitionId(id);

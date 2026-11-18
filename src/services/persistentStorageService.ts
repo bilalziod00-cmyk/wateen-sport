@@ -212,6 +212,7 @@ export function mergeStatesWithoutDuplication(
   return {
     ...localState,
     ...cloudState,
+    schemaVersion: Math.max(localState.schemaVersion || 1, cloudState.schemaVersion || 1),
     customCompetitions: mergeById(
       localState.customCompetitions || [],
       cloudState.customCompetitions || []
@@ -226,18 +227,29 @@ export function mergeStatesWithoutDuplication(
     ),
     matches: mergeById(localState.matches || [], cloudState.matches || []),
     standings: mergeById(localState.standings || [], cloudState.standings || []),
+    standingsHistory: mergeById(
+      localState.standingsHistory || [],
+      cloudState.standingsHistory || []
+    ).slice(0, 150),
     scorers: mergeById(localState.scorers || [], cloudState.scorers || []),
     goalkeepers: mergeById(localState.goalkeepers || [], cloudState.goalkeepers || []),
+    injuries: mergeById(localState.injuries || [], cloudState.injuries || []),
     articles: mergeById(localState.articles || [], cloudState.articles || []),
+    reviewQueueArticles: mergeById(
+      localState.reviewQueueArticles || [],
+      cloudState.reviewQueueArticles || []
+    ),
+    newsSources: mergeById(localState.newsSources || [], cloudState.newsSources || []),
     banners: mergeById(localState.banners || [], cloudState.banners || []),
     cards: mergeById(localState.cards || [], cloudState.cards || []),
     liveStreams: mergeById(localState.liveStreams || [], cloudState.liveStreams || []),
     importBatches: mergeById(localState.importBatches || [], cloudState.importBatches || []),
-    auditLogs: mergeById(localState.auditLogs || [], cloudState.auditLogs || []).slice(0, 120),
+    auditLogs: mergeById(localState.auditLogs || [], cloudState.auditLogs || []).slice(0, 150),
     notifications: mergeById(localState.notifications || [], cloudState.notifications || []).slice(
       0,
       50
     ),
+    automationSettings: cloudState.automationSettings || localState.automationSettings,
     updatedAt: new Date().toISOString(),
   };
 }

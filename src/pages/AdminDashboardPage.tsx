@@ -22,6 +22,7 @@ import { AdminLiveStreamManager } from './admin/AdminLiveStreamManager';
 import { AdminCloudSettings } from './admin/AdminCloudSettings';
 import { AdminSmartImportCenter } from './admin/AdminSmartImportCenter';
 import { AdminAutoDesignStudio } from './admin/AdminAutoDesignStudio';
+import { isLiveMatchStatus } from '../utils/matchStatus';
 
 type AdminTab =
   | 'smart_import'
@@ -51,7 +52,7 @@ export const AdminDashboardPage: React.FC = () => {
       : 'محلي';
 
   const breakingCount = data.articles.filter((a) => a.isBreaking).length;
-  const liveCount = data.matches.filter((m) => m.status === 'live').length;
+  const liveCount = data.matches.filter((m) => isLiveMatchStatus(m.status)).length;
   const activeStreamsCount = (data.liveStreams || []).filter((s) => s.isLive).length;
   const pendingImportsCount = (data.importBatches || []).filter(
     (b) => b.status === 'Pending Review' || b.status === 'Needs Correction'

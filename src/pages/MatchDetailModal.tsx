@@ -12,6 +12,7 @@ import {
 import { MatchItem } from '../types/sports';
 import { COMPETITIONS } from '../constants/competitions';
 import { formatAmmanDate, formatAmmanTime } from '../utils/ammanTime';
+import { getMatchStatusArabicLabel, isLiveMatchStatus } from '../utils/matchStatus';
 import { TeamCrest } from '../components/TeamCrest';
 import { ShareBar } from '../components/ShareSheet';
 import { LiveStreamPlayer } from '../components/LiveStreamPlayer';
@@ -24,7 +25,7 @@ interface MatchDetailModalProps {
 
 export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClose }) => {
   const comp = COMPETITIONS[match.competitionId];
-  const isLive = match.status === 'live';
+  const isLive = isLiveMatchStatus(match.status);
 
   const statsRows = match.stats
     ? [
@@ -80,11 +81,19 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
               {isLive ? (
                 <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-black">
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse-live" />
-                  مباشر الآن • الدقيقة {match.liveMinute || 1}&apos;
+                  {getMatchStatusArabicLabel(match.status, match.liveMinute)}
                 </span>
               ) : match.status === 'finished' ? (
                 <span className="px-3.5 py-1 rounded-full bg-white/10 border border-white/15 text-slate-200 text-xs font-extrabold">
                   نهاية المباراة
+                </span>
+              ) : match.status === 'postponed' ? (
+                <span className="px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-extrabold">
+                  مباراة مؤجلة
+                </span>
+              ) : match.status === 'cancelled' ? (
+                <span className="px-3.5 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-extrabold">
+                  مباراة ملغاة
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/35 text-emerald-300 text-xs font-extrabold tabular-nums">

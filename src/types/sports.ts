@@ -41,14 +41,27 @@ export interface StatPair {
 export interface NewsArticle {
   id: string;
   title: string;
+  originalTitle?: string;
+  originalContent?: string;
   summary: string;
   content: string;
   competitionId: CompetitionId;
   tag: NewsCategoryTag;
   isBreaking: boolean;
   imageUrl: string;
+  imageRightsNote?: string;
   author: string;
+  sourceName?: string;
+  sourceUrl?: string;
+  collectedAt?: string;
   publishedAt: string; // ISO string
+  relatedTeamId?: string;
+  relatedPlayerId?: string;
+  editorialType?: 'confirmed_news' | 'analysis' | 'prediction' | 'opinion';
+  verificationStatus?: 'verified' | 'pending_review' | 'rejected';
+  confidenceScore?: number;
+  publishStatus?: 'auto_published' | 'manual_published' | 'pending_review' | 'rejected' | 'draft';
+  isDemo?: boolean;
   views: number;
   statsCard?: {
     title: string;
@@ -58,8 +71,16 @@ export interface NewsArticle {
   relatedMatchId?: string;
 }
 
-// دعم حالات المباريات الشاملة: مباشر، قادمة، منتهية، مؤجلة، ملغاة
-export type MatchStatus = 'live' | 'upcoming' | 'finished' | 'postponed' | 'cancelled';
+// دعم حالات المباريات الشاملة (8 حالات): لم تبدأ، مباشرة، الشوط الأول، الاستراحة، الشوط الثاني، انتهت، مؤجلة، ملغاة
+export type MatchStatus =
+  | 'live'
+  | 'first_half'
+  | 'halftime'
+  | 'second_half'
+  | 'upcoming'
+  | 'finished'
+  | 'postponed'
+  | 'cancelled';
 
 export interface MatchEvent {
   id: string;
@@ -89,9 +110,11 @@ export interface MatchItem {
   ageCategory?: string;
   groupName?: string;
   round: string;
+  homeTeamId?: string;
   homeTeam: string;
   homeShort: string;
   homeColor: string;
+  awayTeamId?: string;
   awayTeam: string;
   awayShort: string;
   awayColor: string;
@@ -107,6 +130,8 @@ export interface MatchItem {
   postponedReason?: string;
   featured?: boolean;
   isApproved?: boolean;
+  isDemo?: boolean;
+  sourceName?: string;
   importBatchId?: string;
   events: MatchEvent[];
   stats?: MatchStats;
@@ -132,6 +157,7 @@ export interface StandingRow {
   competitionId: CompetitionId;
   season?: string;
   groupName?: string;
+  teamId?: string;
   teamName: string;
   shortName: string;
   teamColor: string;
@@ -144,21 +170,48 @@ export interface StandingRow {
   points: number;
   pointsDeducted?: number;
   position?: number;
+  manualAdjustmentReason?: string;
+  isDemo?: boolean;
   form: ('W' | 'D' | 'L')[];
   zone?: StandingZone;
+}
+
+export interface StandingsHistoryEntry {
+  id: string;
+  competitionId: CompetitionId;
+  season: string;
+  recordedAt: string;
+  reason: string;
+  actor: string;
+  snapshot: {
+    teamId?: string;
+    teamName: string;
+    position: number;
+    played: number;
+    points: number;
+    goalDifference: number;
+  }[];
 }
 
 export interface TopScorer {
   id: string;
   competitionId: CompetitionId;
   season?: string;
+  teamId?: string;
   playerName: string;
+  photoUrl?: string;
   teamName: string;
   teamColor: string;
+  shirtNumber?: number;
+  minutesPlayed?: number | null;
+  yellowCards?: number | null;
+  redCards?: number | null;
+  rating?: number | null;
   goals: number;
   assists: number;
   matches: number;
   position?: string;
+  isDemo?: boolean;
 }
 
 // إحصائيات حراس المرمى (الشباك النظيفة والأهداف المستقبلة)
@@ -166,13 +219,64 @@ export interface GoalkeeperStat {
   id: string;
   competitionId: CompetitionId;
   season?: string;
+  teamId?: string;
   playerName: string;
   teamName: string;
   teamColor: string;
   matches: number;
   cleanSheets: number;
   goalsConceded: number;
-  saves?: number;
+  saves?: number | null;
+  isDemo?: boolean;
+}
+
+// القسم الطبي الإخباري: الإصابات والجاهزية
+export interface InjuryReportItem {
+  id: string;
+  playerId?: string;
+  playerName: string;
+  teamId?: string;
+  teamName: string;
+  competitionId: CompetitionId;
+  declaredInjury: string;
+  announcedDate: string;
+  lastUpdatedAt: string;
+  declaredAbsenceDuration: string; // أو "غير محدد رسمياً"
+  returnStatus: 'injured' | 'rehab' | 'light_training' | 'fit_to_play' | 'unknown';
+  sourceName: string;
+  sourceUrl?: string;
+  isVerifiedOfficial: boolean;
+}
+
+// مصادر الأخبار الرسمية (أردنية، عربية، عالمية)
+export interface NewsSourceConfig {
+  id: string;
+  name: string;
+  region: 'jordan' | 'arab' | 'global';
+  method: 'rss' | 'official_api' | 'open_data' | 'manual_verified';
+  url: string;
+  trustedForAutoPublish: boolean;
+  enabled: boolean;
+  pollIntervalMinutes: number;
+  lastCheckedAt?: string;
+  lastStatus?: 'ok' | 'error' | 'idle';
+  lastError?: string;
+}
+
+// إعدادات محرك WATEEN AI والأتمتة وحدود التكلفة
+export interface WateenAutomationSettings {
+  aiProvider: 'openai' | 'gemini' | 'server_proxy';
+  aiModel: string;
+  autoPublishEnabled: boolean;
+  allowedAutoPublishTags: NewsCategoryTag[];
+  newsPollIntervalMinutes: number;
+  matchesPollIntervalMinutes: number;
+  monthlyBudgetUsd: number;
+  dailyRequestsLimit: number;
+  dailyRequestsUsed: number;
+  monthlySpentEstimateUsd: number;
+  pauseOnBudgetExceeded: boolean;
+  lastAutomationRunAt?: string;
 }
 
 // معايير كسر التعادل القابلة للتخصيص لكل بطولة
@@ -435,16 +539,22 @@ export interface CustomCompetitionItem {
 export type CloudConnectionState = 'local' | 'connecting' | 'connected' | 'failed';
 
 export interface AppDataState {
+  schemaVersion?: number;
   articles: NewsArticle[];
+  reviewQueueArticles?: NewsArticle[];
+  newsSources?: NewsSourceConfig[];
   matches: MatchItem[];
   standings: StandingRow[];
+  standingsHistory?: StandingsHistoryEntry[];
   scorers: TopScorer[];
   goalkeepers?: GoalkeeperStat[];
+  injuries?: InjuryReportItem[];
   teamsDirectory?: TeamDirectoryItem[];
   competitionRules?: Record<string, CompetitionRuleConfig>;
   customCompetitions?: CustomCompetitionItem[];
   importBatches?: SmartImportBatch[];
   auditLogs?: ImportRevisionEntry[];
+  automationSettings?: WateenAutomationSettings;
   banners: HeroBanner[];
   cards: SportsGraphicCard[];
   liveStreams: LiveStreamItem[];

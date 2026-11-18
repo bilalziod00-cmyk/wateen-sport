@@ -4,6 +4,7 @@ import { useAppData } from '../../context/AppDataContext';
 import { COMPETITIONS, JORDAN_STADIUMS, PRIMARY_COMPETITION_LIST } from '../../constants/competitions';
 import { CompetitionId, MatchEvent, MatchItem, MatchStatus } from '../../types/sports';
 import { formatAmmanDateTime, toLocalDateTimeInput } from '../../utils/ammanTime';
+import { getMatchStatusShortBadge, isLiveMatchStatus } from '../../utils/matchStatus';
 
 const DEFAULT_MATCH_FORM = {
   competitionId: 'pro_league' as CompetitionId,
@@ -123,7 +124,7 @@ export const AdminMatchesManager: React.FC = () => {
       homeScore: Number(form.homeScore) || 0,
       awayScore: Number(form.awayScore) || 0,
       status: form.status,
-      liveMinute: form.status === 'live' ? Number(form.liveMinute) || 1 : undefined,
+      liveMinute: isLiveMatchStatus(form.status) ? Number(form.liveMinute) || 1 : undefined,
       kickoffIso: form.kickoffLocal
         ? new Date(form.kickoffLocal).toISOString()
         : new Date().toISOString(),
@@ -284,11 +285,14 @@ export const AdminMatchesManager: React.FC = () => {
                 >
                   <option value="upcoming">قادمة</option>
                   <option value="live">مباشر الآن</option>
+                  <option value="first_half">الشوط الأول</option>
+                  <option value="halftime">استراحة بين الشوطين</option>
+                  <option value="second_half">الشوط الثاني</option>
                   <option value="finished">انتهت</option>
                   <option value="postponed">مؤجلة</option>
                   <option value="cancelled">ملغاة</option>
                 </select>
-                {form.status === 'live' && (
+                {isLiveMatchStatus(form.status) && form.status !== 'halftime' && (
                   <input
                     type="number"
                     min={1}
@@ -506,14 +510,31 @@ export const AdminMatchesManager: React.FC = () => {
             {/* شريط تغيير الحالة المباشرة والتعديل والحذف */}
             <div className="pt-2.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
-                {(['upcoming', 'live', 'finished', 'postponed', 'cancelled'] as MatchStatus[]).map((st) => (
+                {(
+                  [
+                    'upcoming',
+                    'first_half',
+                    'halftime',
+                    'second_half',
+                    'live',
+                    'finished',
+                    'postponed',
+                    'cancelled',
+                  ] as MatchStatus[]
+                ).map((st) => (
                   <button
                     key={st}
                     type="button"
-                    onClick={() => updateMatchLiveState(m.id, st, st === 'live' ? m.liveMinute ?? 1 : undefined)}
+                    onClick={() =>
+                      updateMatchLiveState(
+                        m.id,
+                        st,
+                        isLiveMatchStatus(st) && st !== 'halftime' ? m.liveMinute ?? 1 : undefined
+                      )
+                    }
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border ${
                       m.status === st
-                        ? st === 'live'
+                        ? isLiveMatchStatus(st)
                           ? 'bg-rose-500/25 border-rose-500/50 text-rose-200'
                           : st === 'postponed'
                           ? 'bg-amber-500/25 border-amber-500/50 text-amber-200'
@@ -523,18 +544,13 @@ export const AdminMatchesManager: React.FC = () => {
                         : 'bg-white/5 border-white/8 text-slate-400'
                     }`}
                   >
-                    {st === 'live' ? (
+                    {isLiveMatchStatus(st) ? (
                       <span className="inline-flex items-center gap-1">
-                        <Radio className="w-3 h-3" /> مباشر {m.liveMinute ? `${m.liveMinute}'` : ''}
+                        <Radio className="w-3 h-3" />{' '}
+                        {getMatchStatusShortBadge(st, m.status === st ? m.liveMinute : undefined)}
                       </span>
-                    ) : st === 'upcoming' ? (
-                      'قادمة'
-                    ) : st === 'finished' ? (
-                      'انتهت'
-                    ) : st === 'postponed' ? (
-                      'مؤجلة'
                     ) : (
-                      'ملغاة'
+                      getMatchStatusShortBadge(st)
                     )}
                   </button>
                 ))}

@@ -5,6 +5,7 @@ import { COMPETITIONS, PRIMARY_COMPETITION_LIST } from '../constants/competition
 import { CompetitionId, MatchItem, MatchStatus } from '../types/sports';
 import { getAmmanNowClock } from '../utils/ammanTime';
 import { computeCompetitionStatsSummary } from '../utils/sportsMathEngine';
+import { isLiveMatchStatus, MATCH_STATUS_SORT_WEIGHT } from '../utils/matchStatus';
 import { MatchCard } from '../components/MatchCard';
 import { StandingsTable } from '../components/StandingsTable';
 
@@ -22,7 +23,7 @@ export const ResultsStandingsPage: React.FC<ResultsStandingsPageProps> = ({ onSe
   const [standingsComp, setStandingsComp] = useState<CompetitionId>('pro_league');
 
   const liveCount = useMemo(
-    () => data.matches.filter((m) => m.status === 'live').length,
+    () => data.matches.filter((m) => isLiveMatchStatus(m.status)).length,
     [data.matches]
   );
 
@@ -47,16 +48,13 @@ export const ResultsStandingsPage: React.FC<ResultsStandingsPageProps> = ({ onSe
   }, [data.matches, compFilter]);
 
   const filteredMatches = useMemo(() => {
-    const statusWeight: Record<MatchStatus, number> = {
-      live: 0,
-      upcoming: 1,
-      finished: 2,
-      postponed: 3,
-      cancelled: 4,
-    };
     return data.matches
       .filter((m) => {
-        if (statusFilter !== 'all' && m.status !== statusFilter) return false;
+        if (statusFilter === 'live') {
+          if (!isLiveMatchStatus(m.status)) return false;
+        } else if (statusFilter !== 'all' && m.status !== statusFilter) {
+          return false;
+        }
         if (compFilter !== 'all' && m.competitionId !== compFilter) return false;
         if (roundFilter !== 'all' && m.round !== roundFilter) return false;
         if (teamFilter !== 'all' && m.homeTeam !== teamFilter && m.awayTeam !== teamFilter)
@@ -64,8 +62,8 @@ export const ResultsStandingsPage: React.FC<ResultsStandingsPageProps> = ({ onSe
         return true;
       })
       .sort((a, b) => {
-        if (statusWeight[a.status] !== statusWeight[b.status]) {
-          return statusWeight[a.status] - statusWeight[b.status];
+        if (MATCH_STATUS_SORT_WEIGHT[a.status] !== MATCH_STATUS_SORT_WEIGHT[b.status]) {
+          return MATCH_STATUS_SORT_WEIGHT[a.status] - MATCH_STATUS_SORT_WEIGHT[b.status];
         }
         return new Date(a.kickoffIso).getTime() - new Date(b.kickoffIso).getTime();
       });
