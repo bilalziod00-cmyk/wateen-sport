@@ -11,6 +11,7 @@ import {
   HeroBanner,
   ImportRevisionEntry,
   LiveStreamItem,
+  MatchEvent,
   MatchItem,
   MatchStatus,
   NewsArticle,
@@ -18,6 +19,7 @@ import {
   SmartImportBatch,
   SportsGraphicCard,
   StandingRow,
+  StandingsHistoryEntry,
   TeamDirectoryItem,
   TopScorer,
   WateenAutomationSettings,
@@ -79,6 +81,11 @@ import {
   runNewsIntelligenceBatch,
 } from '../services/newsIntelligenceService';
 import {
+  appendMatchEventSafely,
+  createStandingsHistoryEntry,
+  validateManualStandingAdjustment,
+} from '../services/matchIntelligenceService';
+import {
   generateDeterministicGoalkeeperId,
   generateDeterministicMatchId,
   generateDeterministicNewsId,
@@ -126,14 +133,19 @@ interface AppDataContextValue {
   toggleArticleBreaking: (id: string) => Promise<void>;
   incrementArticleViews: (id: string) => void;
 
-  // إدارة المباريات والنتائج
+  // إدارة المباريات والنتائج وذكاء المباريات
   saveMatch: (match: MatchItem) => Promise<void>;
   deleteMatch: (id: string) => Promise<void>;
   adjustMatchScore: (id: string, side: 'home' | 'away', delta: number) => Promise<void>;
   updateMatchLiveState: (id: string, status: MatchStatus, liveMinute?: number) => Promise<void>;
+  recordMatchEvent: (
+    matchId: string,
+    event: Omit<MatchEvent, 'id'>,
+    syncScoreOnGoal?: boolean
+  ) => Promise<boolean>;
 
   // إدارة الترتيب والهدافين والحراس وقواعد البطولات
-  saveStandingRow: (row: StandingRow) => Promise<void>;
+  saveStandingRow: (row: StandingRow) => Promise<boolean>;
   deleteStandingRow: (id: string) => Promise<void>;
   saveScorer: (scorer: TopScorer) => Promise<void>;
   deleteScorer: (id: string) => Promise<void>;
@@ -646,17 +658,35 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         const rule = prev.competitionRules?.[approvedMatch.competitionId];
         const directory = prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY;
-        const standings =
-          approvedMatch.status === 'finished' || previousMatch?.status === 'finished'
-            ? applyApprovedMatchResultToStandings(
-                approvedMatch,
-                previousMatch,
-                prev.standings,
-                matches,
-                rule,
-                directory
-              )
-            : prev.standings;
+        const standingsUpdated =
+          approvedMatch.status === 'finished' || previousMatch?.status === 'finished';
+        const standings = standingsUpdated
+          ? applyApprovedMatchResultToStandings(
+              approvedMatch,
+              previousMatch,
+              prev.standings,
+              matches,
+              rule,
+              directory
+            )
+          : prev.standings;
+
+        let nextHistory: StandingsHistoryEntry[] = prev.standingsHistory || [];
+        if (standingsUpdated) {
+          const compSorted = standings.filter(
+            (s) => s.competitionId === approvedMatch.competitionId
+          );
+          const histEntry = createStandingsHistoryEntry({
+            competitionId: approvedMatch.competitionId,
+            season: approvedMatch.season || rule?.season || '2026 / 2027',
+            round: approvedMatch.round,
+            triggerType: 'match_result',
+            reason: `اعتماد نتيجة ${approvedMatch.homeTeam} (${approvedMatch.homeScore}-${approvedMatch.awayScore}) ${approvedMatch.awayTeam}`,
+            actor: 'مدير النظام',
+            sortedCompRows: compSorted,
+          });
+          nextHistory = [histEntry, ...nextHistory].slice(0, 150);
+        }
 
         const auditEntry: ImportRevisionEntry = {
           id: `aud-${Date.now()}`,
@@ -670,7 +700,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           ...prev,
           matches,
           standings,
-          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 100),
+          standingsHistory: nextHistory,
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
         };
       });
 
@@ -760,31 +791,107 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               : undefined,
         };
         const matches = prev.matches.map((m) => (m.id === id ? updatedMatch : m));
-        const standings =
-          status === 'finished' || previousMatch.status === 'finished'
-            ? applyApprovedMatchResultToStandings(
-                updatedMatch,
-                previousMatch,
-                prev.standings,
-                matches,
-                prev.competitionRules?.[updatedMatch.competitionId],
-                prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY
-              )
-            : prev.standings;
-        return { ...prev, matches, standings };
+        const standingsChanged = status === 'finished' || previousMatch.status === 'finished';
+        const standings = standingsChanged
+          ? applyApprovedMatchResultToStandings(
+              updatedMatch,
+              previousMatch,
+              prev.standings,
+              matches,
+              prev.competitionRules?.[updatedMatch.competitionId],
+              prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY
+            )
+          : prev.standings;
+
+        let nextHistory = prev.standingsHistory || [];
+        if (standingsChanged) {
+          const histEntry = createStandingsHistoryEntry({
+            competitionId: updatedMatch.competitionId,
+            season: updatedMatch.season || '2026 / 2027',
+            round: updatedMatch.round,
+            triggerType: 'match_result',
+            reason: `تحديث حالة المباراة إلى (${status}): ${updatedMatch.homeTeam} ${updatedMatch.homeScore}-${updatedMatch.awayScore} ${updatedMatch.awayTeam}`,
+            actor: 'مدير النظام',
+            sortedCompRows: standings.filter(
+              (s) => s.competitionId === updatedMatch.competitionId
+            ),
+          });
+          nextHistory = [histEntry, ...nextHistory].slice(0, 150);
+        }
+
+        return { ...prev, matches, standings, standingsHistory: nextHistory };
       });
       showToast('تم تحديث حالة المباراة والترتيب فوراً', 'emerald');
     },
     [commitState, isAdminUnlocked, showToast]
   );
 
-  // جداول الترتيب
-  const saveStandingRow = useCallback(
-    async (row: StandingRow) => {
+  const recordMatchEvent = useCallback(
+    async (
+      matchId: string,
+      event: Omit<MatchEvent, 'id'>,
+      syncScoreOnGoal = true
+    ): Promise<boolean> => {
       if (!isAdminUnlocked) {
         showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
-        return;
+        return false;
       }
+
+      let resultStatus: { added: boolean; reason?: string } = { added: false };
+      await commitState((prev) => {
+        const target = prev.matches.find((m) => m.id === matchId);
+        if (!target) {
+          resultStatus = { added: false, reason: 'المباراة غير موجودة' };
+          return prev;
+        }
+        const appended = appendMatchEventSafely(target, event, syncScoreOnGoal);
+        resultStatus = { added: appended.added, reason: appended.reason };
+        if (!appended.added) return prev;
+
+        const matches = prev.matches.map((m) => (m.id === matchId ? appended.match : m));
+        const standings =
+          appended.match.status === 'finished' && event.type === 'goal' && syncScoreOnGoal
+            ? applyApprovedMatchResultToStandings(
+                appended.match,
+                target,
+                prev.standings,
+                matches,
+                prev.competitionRules?.[appended.match.competitionId],
+                prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY
+              )
+            : prev.standings;
+        return { ...prev, matches, standings };
+      });
+
+      if (!resultStatus.added) {
+        showToast(resultStatus.reason || 'تعذر تسجيل الحدث', 'crimson');
+        return false;
+      }
+      showToast('تم تسجيل حدث المباراة بنجاح', 'emerald');
+      return true;
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  // جداول الترتيب (مع إلزام تسجيل سبب التعديل اليدوي وحفظ اللقطة التاريخية)
+  const saveStandingRow = useCallback(
+    async (row: StandingRow): Promise<boolean> => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return false;
+      }
+
+      const existingRow = data.standings.find((s) => s.id === row.id) || null;
+      const validation = validateManualStandingAdjustment({
+        isEditingExisting: Boolean(existingRow),
+        previousRow: existingRow,
+        nextRow: row,
+      });
+      if (!validation.ok) {
+        showToast(validation.error || 'يرجى كتابة سبب التعديل اليدوي', 'crimson');
+        return false;
+      }
+
       await commitState((prev) => {
         const exists = prev.standings.some((s) => s.id === row.id);
         const resolvedId =
@@ -814,11 +921,41 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           prev.matches.filter((m) => m.competitionId === row.competitionId && m.status === 'finished'),
           prev.competitionRules?.[row.competitionId]
         );
-        return { ...prev, standings: [...otherRows, ...sortedComp] };
+
+        const reasonText =
+          (row.manualAdjustmentReason || '').trim() ||
+          `تعديل يدوي في جدول الترتيب للفريق (${normalizedRow.teamName})`;
+        const histEntry = createStandingsHistoryEntry({
+          competitionId: row.competitionId,
+          season:
+            row.season || prev.competitionRules?.[row.competitionId]?.season || '2026 / 2027',
+          triggerType: 'manual_adjustment',
+          reason: reasonText,
+          actor: 'مدير النظام',
+          sortedCompRows: sortedComp,
+        });
+
+        const auditEntry: ImportRevisionEntry = {
+          id: `aud-st-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actor: 'مدير النظام',
+          action: 'MANUAL_STANDINGS_ADJUSTMENT',
+          details: `${normalizedRow.teamName}: ${reasonText} (النقاط: ${normalizedRow.points}${
+            normalizedRow.pointsDeducted ? `، خصم: ${normalizedRow.pointsDeducted}` : ''
+          })`,
+        };
+
+        return {
+          ...prev,
+          standings: [...otherRows, ...sortedComp],
+          standingsHistory: [histEntry, ...(prev.standingsHistory || [])].slice(0, 150),
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+        };
       });
-      showToast('تم تحديث وإعادة ترتيب الجدول بنجاح', 'emerald');
+      showToast('تم تحديث الترتيب وحفظ السبب في السجل التاريخي', 'emerald');
+      return true;
     },
-    [commitState, isAdminUnlocked, showToast]
+    [commitState, data.standings, isAdminUnlocked, showToast]
   );
 
   const deleteStandingRow = useCallback(
@@ -973,7 +1110,19 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           rule,
           directory
         );
-        return { ...prev, standings };
+        const histEntry = createStandingsHistoryEntry({
+          competitionId,
+          season: rule?.season || '2026 / 2027',
+          triggerType: 'recalculation',
+          reason: `إعادة احتساب الترتيب التلقائي من المباريات المعتمدة`,
+          actor: 'محرك الحسابات الرياضية',
+          sortedCompRows: standings.filter((s) => s.competitionId === competitionId),
+        });
+        return {
+          ...prev,
+          standings,
+          standingsHistory: [histEntry, ...(prev.standingsHistory || [])].slice(0, 150),
+        };
       });
       showToast('تمت إعادة حساب الترتيب من النتائج المعتمدة', 'emerald');
     },
@@ -2160,6 +2309,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteMatch,
         adjustMatchScore,
         updateMatchLiveState,
+        recordMatchEvent,
         saveStandingRow,
         deleteStandingRow,
         saveScorer,

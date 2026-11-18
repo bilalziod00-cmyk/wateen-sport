@@ -198,6 +198,8 @@ export interface StandingsHistoryEntry {
   id: string;
   competitionId: CompetitionId;
   season: string;
+  round?: string;
+  triggerType?: 'match_result' | 'manual_adjustment' | 'recalculation' | 'import_batch';
   recordedAt: string;
   reason: string;
   actor: string;

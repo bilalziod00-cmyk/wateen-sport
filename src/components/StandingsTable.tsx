@@ -6,6 +6,7 @@ interface StandingsTableProps {
   rows: StandingRow[];
   title?: string;
   compact?: boolean;
+  rankDeltas?: Record<string, number>;
 }
 
 /**
@@ -28,7 +29,12 @@ export function sortStandings(rows: StandingRow[]): StandingRow[] {
   });
 }
 
-export const StandingsTable: React.FC<StandingsTableProps> = ({ rows, title, compact = false }) => {
+export const StandingsTable: React.FC<StandingsTableProps> = ({
+  rows,
+  title,
+  compact = false,
+  rankDeltas,
+}) => {
   const sorted = sortStandings(rows);
   const isAllDemo = sorted.length > 0 && sorted.every((r) => r.isDemo === true);
 
@@ -100,7 +106,23 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({ rows, title, com
                         row.zone
                       )}`}
                     />
-                    {row.position || idx + 1}
+                    <div className="inline-flex items-center gap-1">
+                      <span>{row.position || idx + 1}</span>
+                      {rankDeltas && typeof rankDeltas[row.teamName] === 'number' && rankDeltas[row.teamName] !== 0 && (
+                        <span
+                          className={`text-[9px] font-black ${
+                            rankDeltas[row.teamName] > 0 ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                          title={`حركة المركز: ${rankDeltas[row.teamName] > 0 ? 'صعود' : 'تراجع'} ${Math.abs(
+                            rankDeltas[row.teamName]
+                          )}`}
+                        >
+                          {rankDeltas[row.teamName] > 0
+                            ? `▲${rankDeltas[row.teamName]}`
+                            : `▼${Math.abs(rankDeltas[row.teamName])}`}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2.5 px-2">
                     <div className="flex items-center gap-2 min-w-[115px]">

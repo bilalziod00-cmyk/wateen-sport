@@ -1,15 +1,24 @@
 import React, { useMemo, useState } from 'react';
-import { Award, Edit3, Plus, Table2, Trash2, X } from 'lucide-react';
+import { Award, Edit3, History, Plus, RefreshCw, Table2, Trash2, X } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 import { COMPETITIONS, PRIMARY_COMPETITION_LIST } from '../../constants/competitions';
 import { CompetitionId, StandingRow, StandingZone, TopScorer } from '../../types/sports';
 import { sortStandings } from '../../components/StandingsTable';
+import { formatAmmanDateTime } from '../../utils/ammanTime';
+import { computeTeamRankDeltas } from '../../services/matchIntelligenceService';
 
 export const AdminStandingsManager: React.FC = () => {
-  const { data, saveStandingRow, deleteStandingRow, saveScorer, deleteScorer, showToast } =
-    useAppData();
+  const {
+    data,
+    saveStandingRow,
+    deleteStandingRow,
+    saveScorer,
+    deleteScorer,
+    recalculateCompetitionStandings,
+    showToast,
+  } = useAppData();
   const [compId, setCompId] = useState<CompetitionId>('pro_league');
-  const [subMode, setSubMode] = useState<'table' | 'scorers'>('table');
+  const [subMode, setSubMode] = useState<'table' | 'scorers' | 'history'>('table');
 
   // حالة نموذج الترتيب
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
@@ -25,6 +34,8 @@ export const AdminStandingsManager: React.FC = () => {
     goalsFor: 0,
     goalsAgainst: 0,
     points: 0,
+    pointsDeducted: 0,
+    manualAdjustmentReason: '',
     autoCalcPoints: true,
     zone: 'none' as StandingZone,
   });
@@ -44,6 +55,16 @@ export const AdminStandingsManager: React.FC = () => {
   const rows = useMemo(
     () => sortStandings(data.standings.filter((s) => s.competitionId === compId)),
     [data.standings, compId]
+  );
+
+  const compHistory = useMemo(
+    () => (data.standingsHistory || []).filter((h) => h.competitionId === compId),
+    [data.standingsHistory, compId]
+  );
+
+  const rankDeltas = useMemo(
+    () => computeTeamRankDeltas(rows, data.standingsHistory || [], compId),
+    [rows, data.standingsHistory, compId]
   );
 
   const scorers = useMemo(
@@ -67,6 +88,8 @@ export const AdminStandingsManager: React.FC = () => {
       goalsFor: 0,
       goalsAgainst: 0,
       points: 0,
+      pointsDeducted: 0,
+      manualAdjustmentReason: '',
       autoCalcPoints: true,
       zone: 'none',
     });
@@ -86,7 +109,9 @@ export const AdminStandingsManager: React.FC = () => {
       goalsFor: r.goalsFor,
       goalsAgainst: r.goalsAgainst,
       points: r.points,
-      autoCalcPoints: r.points === r.won * 3 + r.drawn,
+      pointsDeducted: r.pointsDeducted || 0,
+      manualAdjustmentReason: r.manualAdjustmentReason || '',
+      autoCalcPoints: r.points === r.won * 3 + r.drawn - (r.pointsDeducted || 0),
       zone: r.zone || 'none',
     });
     setShowRowForm(true);
@@ -99,12 +124,13 @@ export const AdminStandingsManager: React.FC = () => {
       return;
     }
     const existing = editingRowId ? data.standings.find((s) => s.id === editingRowId) : null;
+    const deducted = Math.max(0, Number(rowForm.pointsDeducted) || 0);
     const computedPoints = rowForm.autoCalcPoints
-      ? rowForm.won * 3 + rowForm.drawn
+      ? Math.max(0, rowForm.won * 3 + rowForm.drawn - deducted)
       : Number(rowForm.points);
     const computedPlayed = Math.max(rowForm.played, rowForm.won + rowForm.drawn + rowForm.lost);
 
-    await saveStandingRow({
+    const savedOk = await saveStandingRow({
       id: editingRowId || `st-${Date.now()}`,
       competitionId: compId,
       teamName: rowForm.teamName.trim(),
@@ -117,10 +143,14 @@ export const AdminStandingsManager: React.FC = () => {
       goalsFor: Number(rowForm.goalsFor),
       goalsAgainst: Number(rowForm.goalsAgainst),
       points: computedPoints,
+      pointsDeducted: deducted,
+      manualAdjustmentReason: rowForm.manualAdjustmentReason.trim() || undefined,
       form: existing?.form || ['W', 'D', 'W'],
       zone: rowForm.zone,
     });
-    setShowRowForm(false);
+    if (savedOk) {
+      setShowRowForm(false);
+    }
   };
 
   const openNewScorer = () => {
@@ -199,8 +229,8 @@ export const AdminStandingsManager: React.FC = () => {
         ))}
       </div>
 
-      {/* التبديل بين الترتيب والهدافين */}
-      <div className="flex items-center justify-between gap-2">
+      {/* التبديل بين الترتيب والهدافين والسجل التاريخي */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 bg-[#0E1621] p-1 rounded-xl border border-white/10">
           <button
             type="button"
@@ -222,16 +252,40 @@ export const AdminStandingsManager: React.FC = () => {
             <Award className="w-3.5 h-3.5" />
             الهدافون ({scorers.length})
           </button>
+          <button
+            type="button"
+            onClick={() => setSubMode('history')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold inline-flex items-center gap-1.5 ${
+              subMode === 'history' ? 'bg-sky-500/20 text-sky-300' : 'text-slate-400'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            السجل التاريخي ({compHistory.length})
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={subMode === 'table' ? openNewRow : openNewScorer}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 text-pitch-950 font-black text-xs"
-        >
-          <Plus className="w-4 h-4" />
-          {subMode === 'table' ? 'إضافة فريق' : 'إضافة هداف'}
-        </button>
+        <div className="flex items-center gap-1.5">
+          {subMode === 'table' && (
+            <button
+              type="button"
+              onClick={() => recalculateCompetitionStandings(compId)}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-sky-500/15 border border-sky-500/35 text-sky-300 font-black text-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              إعادة حساب
+            </button>
+          )}
+          {subMode !== 'history' && (
+            <button
+              type="button"
+              onClick={subMode === 'table' ? openNewRow : openNewScorer}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 text-pitch-950 font-black text-xs"
+            >
+              <Plus className="w-4 h-4" />
+              {subMode === 'table' ? 'إضافة فريق' : 'إضافة هداف'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* نموذج جدول الترتيب */}
@@ -324,7 +378,12 @@ export const AdminStandingsManager: React.FC = () => {
                   onChange={(e) => setRowForm({ ...rowForm, autoCalcPoints: e.target.checked })}
                   className="accent-emerald-500"
                 />
-                حساب النقاط تلقائياً ({rowForm.won * 3 + rowForm.drawn} نقطة)
+                حساب النقاط تلقائياً (
+                {Math.max(
+                  0,
+                  rowForm.won * 3 + rowForm.drawn - (Number(rowForm.pointsDeducted) || 0)
+                )}{' '}
+                نقطة)
               </label>
               {!rowForm.autoCalcPoints && (
                 <input
@@ -334,6 +393,34 @@ export const AdminStandingsManager: React.FC = () => {
                   className="w-24 rounded-lg bg-[#070B10] border border-white/12 px-2 py-1 text-xs text-center text-emerald-300 font-black"
                 />
               )}
+            </div>
+
+            <div>
+              <label className="text-[11px] text-amber-300 block mb-1">خصم نقاط رسمي</label>
+              <input
+                type="number"
+                min={0}
+                value={rowForm.pointsDeducted}
+                onChange={(e) =>
+                  setRowForm({ ...rowForm, pointsDeducted: Number(e.target.value) })
+                }
+                className="w-full rounded-xl bg-[#070B10] border border-amber-500/35 px-3 py-2 text-xs text-center font-black text-amber-300"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-3">
+              <label className="text-[11px] text-amber-300 font-bold block mb-1">
+                سبب التعديل اليدوي أو خصم النقاط (إلزامي عند تغيير الأرقام يدوياً)
+              </label>
+              <input
+                type="text"
+                value={rowForm.manualAdjustmentReason}
+                onChange={(e) =>
+                  setRowForm({ ...rowForm, manualAdjustmentReason: e.target.value })
+                }
+                placeholder="مثال: قرار لجنة الانضباط بخصم 3 نقاط / تصحيح نتيجة رسمية من الاتحاد"
+                className="w-full rounded-xl bg-[#070B10] border border-amber-500/35 px-3 py-2 text-xs text-white placeholder:text-slate-500"
+              />
             </div>
           </div>
 
@@ -441,7 +528,7 @@ export const AdminStandingsManager: React.FC = () => {
         </form>
       )}
 
-      {/* عرض القائمة القابلة للتعديل */}
+      {/* عرض القائمة القابلة للتعديل أو السجل التاريخي */}
       {subMode === 'table' ? (
         <div className="space-y-2">
           {rows.map((r, idx) => (
@@ -450,7 +537,20 @@ export const AdminStandingsManager: React.FC = () => {
               className="rounded-2xl bg-[#0E1621] border border-white/8 px-3.5 py-2.5 flex items-center justify-between gap-2 tabular-nums"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-6 text-center text-xs font-black text-slate-400">{idx + 1}</span>
+                <span className="w-6 text-center text-xs font-black text-slate-400">
+                  {r.position || idx + 1}
+                </span>
+                {typeof rankDeltas[r.teamName] === 'number' && rankDeltas[r.teamName] !== 0 && (
+                  <span
+                    className={`text-[10px] font-black ${
+                      rankDeltas[r.teamName] > 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {rankDeltas[r.teamName] > 0
+                      ? `▲${rankDeltas[r.teamName]}`
+                      : `▼${Math.abs(rankDeltas[r.teamName])}`}
+                  </span>
+                )}
                 <span
                   className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: r.teamColor }}
@@ -460,8 +560,9 @@ export const AdminStandingsManager: React.FC = () => {
                     {r.teamName}
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    لعب {r.played} • ف {r.won} • ت {r.drawn} • خ {r.lost} • فارق{' '}
-                    {r.goalsFor - r.goalsAgainst}
+                    لعب {r.played} • ف {r.won} • ت {r.drawn} • خ {r.lost} • له {r.goalsFor} • عليه{' '}
+                    {r.goalsAgainst} • فارق {r.goalsFor - r.goalsAgainst}
+                    {r.pointsDeducted ? ` • خصم -${r.pointsDeducted}` : ''}
                   </div>
                 </div>
               </div>
@@ -486,6 +587,38 @@ export const AdminStandingsManager: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      ) : subMode === 'history' ? (
+        <div className="space-y-2.5">
+          {compHistory.length === 0 ? (
+            <div className="rounded-2xl bg-[#0E1621] border border-white/10 p-6 text-center text-xs text-slate-400">
+              لا توجد تغييرات تاريخية مسجلة لهذه البطولة بعد. سيُسجل كل تحديث نتيجة أو تعديل يدوي للترتيب هنا تلقائياً.
+            </div>
+          ) : (
+            compHistory.map((h) => (
+              <div
+                key={h.id}
+                className="rounded-2xl bg-[#0E1621] border border-white/10 p-3.5 space-y-2"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-black text-emerald-300">{h.reason}</span>
+                  <span className="text-[10px] text-slate-400 tabular-nums">
+                    {formatAmmanDateTime(h.recordedAt)} • {h.actor}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 text-[11px] tabular-nums">
+                  {h.snapshot.slice(0, 6).map((snap) => (
+                    <span
+                      key={snap.teamName}
+                      className="px-2 py-0.5 rounded-lg bg-black/45 border border-white/10 text-slate-200"
+                    >
+                      #{snap.position} {snap.teamName} ({snap.points} ن)
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       ) : (
         <div className="space-y-2">

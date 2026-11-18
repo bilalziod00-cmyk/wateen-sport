@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Edit3, Minus, Plus, Radio, Trash2, Tv, X } from 'lucide-react';
+import { Edit3, Minus, Plus, Radio, Sparkles, Trash2, Tv, X } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 import { COMPETITIONS, JORDAN_STADIUMS, PRIMARY_COMPETITION_LIST } from '../../constants/competitions';
 import { CompetitionId, MatchEvent, MatchItem, MatchStatus } from '../../types/sports';
@@ -34,6 +34,7 @@ export const AdminMatchesManager: React.FC = () => {
     deleteMatch,
     adjustMatchScore,
     updateMatchLiveState,
+    recordMatchEvent,
     showToast,
   } = useAppData();
 
@@ -46,6 +47,12 @@ export const AdminMatchesManager: React.FC = () => {
   const [newEvMinute, setNewEvMinute] = useState(45);
   const [newEvTeam, setNewEvTeam] = useState<'home' | 'away'>('home');
   const [newEvType, setNewEvType] = useState<MatchEvent['type']>('goal');
+  const [quickEventMatchId, setQuickEventMatchId] = useState<string | null>(null);
+  const [quickEvMinute, setQuickEvMinute] = useState<number>(45);
+  const [quickEvTeam, setQuickEvTeam] = useState<'home' | 'away'>('home');
+  const [quickEvType, setQuickEvType] = useState<MatchEvent['type']>('goal');
+  const [quickEvPlayer, setQuickEvPlayer] = useState<string>('');
+  const [quickEvSyncScore, setQuickEvSyncScore] = useState<boolean>(true);
 
   const scrollToForm = () => {
     window.setTimeout(() => {
@@ -559,6 +566,16 @@ export const AdminMatchesManager: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
+                  onClick={() =>
+                    setQuickEventMatchId(quickEventMatchId === m.id ? null : m.id)
+                  }
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-extrabold"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  حدث ({m.events?.length || 0})
+                </button>
+                <button
+                  type="button"
                   onClick={() => openEdit(m)}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[11px] font-extrabold"
                 >
@@ -575,6 +592,80 @@ export const AdminMatchesManager: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {quickEventMatchId === m.id && (
+              <div className="rounded-xl bg-black/45 border border-emerald-500/30 p-3 space-y-2.5">
+                <div className="text-[11px] font-black text-emerald-300">
+                  تسجيل حدث رسمي موثّق (هدف / بطاقة / تبديل)
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={125}
+                    value={quickEvMinute}
+                    onChange={(e) => setQuickEvMinute(Number(e.target.value))}
+                    placeholder="الدقيقة"
+                    className="rounded-lg bg-[#070B10] border border-white/12 px-2 py-1.5 text-xs text-center text-white"
+                  />
+                  <select
+                    value={quickEvTeam}
+                    onChange={(e) => setQuickEvTeam(e.target.value as 'home' | 'away')}
+                    className="rounded-lg bg-[#070B10] border border-white/12 px-2 py-1.5 text-xs text-white"
+                  >
+                    <option value="home">{m.homeTeam}</option>
+                    <option value="away">{m.awayTeam}</option>
+                  </select>
+                  <select
+                    value={quickEvType}
+                    onChange={(e) => setQuickEvType(e.target.value as MatchEvent['type'])}
+                    className="rounded-lg bg-[#070B10] border border-white/12 px-2 py-1.5 text-xs text-white"
+                  >
+                    <option value="goal">⚽ هدف</option>
+                    <option value="yellow_card">🟨 بطاقة صفراء</option>
+                    <option value="red_card">🟥 بطاقة حمراء</option>
+                    <option value="substitution">🔄 تبديل</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={quickEvPlayer}
+                    onChange={(e) => setQuickEvPlayer(e.target.value)}
+                    placeholder="اسم اللاعب"
+                    className="rounded-lg bg-[#070B10] border border-white/12 px-2 py-1.5 text-xs text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await recordMatchEvent(
+                        m.id,
+                        {
+                          minute: quickEvMinute,
+                          team: quickEvTeam,
+                          type: quickEvType,
+                          playerName: quickEvPlayer,
+                        },
+                        quickEvSyncScore
+                      );
+                      if (ok) setQuickEvPlayer('');
+                    }}
+                    className="rounded-lg bg-emerald-500 text-black text-xs font-black py-1.5"
+                  >
+                    + حفظ الحدث
+                  </button>
+                </div>
+                {quickEvType === 'goal' && (
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={quickEvSyncScore}
+                      onChange={(e) => setQuickEvSyncScore(e.target.checked)}
+                      className="accent-emerald-500"
+                    />
+                    زيادة نتيجة الفريق تلقائياً بمقدار هدف عند حفظ الهدف
+                  </label>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

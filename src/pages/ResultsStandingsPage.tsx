@@ -6,6 +6,7 @@ import { CompetitionId, MatchItem, MatchStatus } from '../types/sports';
 import { getAmmanNowClock } from '../utils/ammanTime';
 import { computeCompetitionStatsSummary } from '../utils/sportsMathEngine';
 import { isLiveMatchStatus, MATCH_STATUS_SORT_WEIGHT } from '../utils/matchStatus';
+import { computeTeamRankDeltas } from '../services/matchIntelligenceService';
 import { MatchCard } from '../components/MatchCard';
 import { StandingsTable } from '../components/StandingsTable';
 
@@ -72,6 +73,16 @@ export const ResultsStandingsPage: React.FC<ResultsStandingsPageProps> = ({ onSe
   const selectedStandings = useMemo(
     () => data.standings.filter((s) => s.competitionId === standingsComp),
     [data.standings, standingsComp]
+  );
+
+  const rankDeltas = useMemo(
+    () =>
+      computeTeamRankDeltas(
+        selectedStandings,
+        data.standingsHistory || [],
+        standingsComp
+      ),
+    [selectedStandings, data.standingsHistory, standingsComp]
   );
 
   const selectedScorers = useMemo(
@@ -334,6 +345,7 @@ export const ResultsStandingsPage: React.FC<ResultsStandingsPageProps> = ({ onSe
           {/* جدول الترتيب */}
           <StandingsTable
             rows={selectedStandings}
+            rankDeltas={rankDeltas}
             title={`جدول ترتيب ${COMPETITIONS[standingsComp].name}`}
           />
 
