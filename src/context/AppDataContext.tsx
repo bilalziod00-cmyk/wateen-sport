@@ -25,7 +25,10 @@ import {
   teardownFirebaseCloud,
   uploadMediaToCloud,
 } from '../services/firebaseService';
-import { initializeNativeAndroid } from '../services/nativeAndroid';
+import {
+  initializeNativeDisplay,
+  initializeNotificationsAfterSplash,
+} from '../services/nativeAndroid';
 
 const LOCAL_DATA_KEY = 'wateen_sport_data_v1';
 const ADMIN_SESSION_KEY = 'wateen_admin_session_v1';
@@ -241,9 +244,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   useEffect(() => {
-    initializeNativeAndroid((title, body) => {
-      showToast(`${title}: ${body}`, 'amber');
-    });
+    // تهيئة العرض فقط أثناء شاشة الافتتاح دون طلب الإشعارات قبل اكتمال التهيئة
+    initializeNativeDisplay();
 
     const saved = getSavedFirebaseConfig();
     if (saved) {
@@ -253,7 +255,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => {
       if (unsubRef.current) unsubRef.current();
     };
-  }, [activateFirebase, showToast]);
+  }, [activateFirebase]);
+
+  // تفعيل الإشعارات بهدوء بعد انتهاء شاشة الافتتاح والانتقال للصفحة الرئيسية
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      initializeNotificationsAfterSplash((title, body) => {
+        showToast(`${title}: ${body}`, 'amber');
+      });
+    }, 2350);
+    return () => window.clearTimeout(timer);
+  }, [showToast]);
 
   const unreadNotificationsCount = data.notifications.filter(
     (n) => !lastReadNotifAt || new Date(n.createdAt).getTime() > new Date(lastReadNotifAt).getTime()

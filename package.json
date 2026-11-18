@@ -5,6 +5,8 @@
   "description": "وتين سبورت - تطبيق أخبار وبطولات ونتائج الرياضة الأردنية مع لوحة تحكم إدارية ومزامنة سحابية وتصدير APK لأندرويد",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/patch-push-plugin.mjs",
+    "prebuild": "node scripts/patch-push-plugin.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

@@ -17,6 +17,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { ArticleDetailModal } from './pages/ArticleDetailModal';
 import { MatchDetailModal } from './pages/MatchDetailModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
+import { CinematicSplashScreen } from './components/CinematicSplashScreen';
 
 const WateenShell: React.FC = () => {
   const {
@@ -29,6 +30,7 @@ const WateenShell: React.FC = () => {
   } = useAppData();
 
   const [activeTab, setActiveTab] = useState<NavTab>('home');
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [selectedCompetitionId, setSelectedCompetitionId] = useState<CompetitionId | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
@@ -59,6 +61,7 @@ const WateenShell: React.FC = () => {
 
   return (
     <div className="min-h-dvh flex flex-col bg-[#070B10] text-slate-100">
+      {showSplash && <CinematicSplashScreen onFinished={() => setShowSplash(false)} />}
       {/* الترويسة العلوية الثابتة بهوية وتين سبورت */}
       <header className="sticky top-0 z-30 bg-[#070B10]/90 backdrop-blur-xl border-b border-white/10 safe-top">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
@@ -73,7 +76,7 @@ const WateenShell: React.FC = () => {
             <img
               src="./images/app-icon.png"
               alt="شعار وتين سبورت"
-              className="w-10 h-10 rounded-xl border border-emerald-500/35 shadow-glow object-cover"
+              className="w-11 h-11 rounded-full bg-black border-2 border-[#00FF40]/70 shadow-[0_0_14px_rgba(0,255,64,0.35)] object-contain"
             />
             <div>
               <div className="flex items-center gap-1.5">
@@ -81,7 +84,7 @@ const WateenShell: React.FC = () => {
                   وتين سبورت
                 </span>
                 <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  JO
+                  WATEEN SPORT
                 </span>
               </div>
               <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
