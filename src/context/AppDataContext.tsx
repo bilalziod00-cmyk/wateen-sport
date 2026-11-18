@@ -2,8 +2,10 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import {
   AppDataState,
   AppNotification,
+  CloudConnectionState,
   CompetitionId,
   CompetitionRuleConfig,
+  CustomCompetitionItem,
   FirebaseCloudConfig,
   GoalkeeperStat,
   HeroBanner,
@@ -33,22 +35,37 @@ import {
 } from '../utils/sportsMathEngine';
 import { validateExtractedImportRows } from '../utils/aiSmartImportEngine';
 import {
+  fetchCloudStateFromFirestore,
   getSavedFirebaseConfig,
   initFirebaseCloud,
   isFirebaseReady,
+  migrateLocalDataToFirestoreWithVerification,
   queueCloudPushNotification,
   saveCloudState,
   saveFirebaseConfig,
+  signInAdminWithFirebaseEmail,
+  signInAnonymousIfAllowed,
+  signOutFirebaseAdmin,
   subscribeToCloudState,
+  subscribeToFirebaseAuth,
   teardownFirebaseCloud,
   uploadMediaToCloud,
 } from '../services/firebaseService';
+import {
+  createPreMigrationBackupSnapshot,
+  getPreMigrationBackupSnapshot,
+  loadStateFromIndexedDB,
+  LOCAL_DATA_KEY,
+  mergeStatesWithoutDuplication,
+  MigrationVerificationReport,
+  PreMigrationBackupSnapshot,
+  saveStateToIndexedDB,
+} from '../services/persistentStorageService';
 import {
   initializeNativeDisplay,
   initializeNotificationsAfterSplash,
 } from '../services/nativeAndroid';
 
-const LOCAL_DATA_KEY = 'wateen_sport_data_v1';
 const ADMIN_SESSION_KEY = 'wateen_admin_session_v1';
 const LAST_READ_NOTIF_KEY = 'wateen_last_read_notif_v1';
 
@@ -61,9 +78,13 @@ interface ToastMessage {
 interface AppDataContextValue {
   data: AppDataState;
   cloudMode: 'local' | 'firebase';
+  cloudConnectionState: CloudConnectionState;
   cloudConfig: FirebaseCloudConfig | null;
   cloudSyncStatus: 'idle' | 'syncing' | 'connected' | 'error';
   cloudError: string | null;
+  firebaseUserEmail: string | null;
+  preMigrationBackup: PreMigrationBackupSnapshot | null;
+  lastMigrationReport: MigrationVerificationReport | null;
 
   // إشعارات الواجهة والـ Toast
   toast: ToastMessage | null;
@@ -97,6 +118,8 @@ interface AppDataContextValue {
   saveGoalkeeper: (gk: GoalkeeperStat) => Promise<void>;
   deleteGoalkeeper: (id: string) => Promise<void>;
   saveCompetitionRule: (rule: CompetitionRuleConfig) => Promise<void>;
+  saveCustomCompetition: (comp: CustomCompetitionItem) => Promise<void>;
+  deleteCustomCompetition: (id: string) => Promise<void>;
   recalculateCompetitionStandings: (competitionId: CompetitionId) => Promise<void>;
   registerNewTeam: (team: {
     name: string;
@@ -133,10 +156,16 @@ interface AppDataContextValue {
   }) => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
 
-  // إعدادات السحابة والنسخ الاحتياطي
+  // إعدادات السحابة والنسخ الاحتياطي والمصادقة
   connectFirebase: (config: FirebaseCloudConfig) => Promise<boolean>;
   disconnectFirebase: () => Promise<void>;
   pushCurrentDataToCloud: () => Promise<boolean>;
+  pullDataFromCloudNow: () => Promise<boolean>;
+  migrateLocalDataToCloudVerified: () => Promise<MigrationVerificationReport>;
+  createBackupSnapshotNow: () => PreMigrationBackupSnapshot;
+  restorePreMigrationBackup: () => Promise<boolean>;
+  loginAdminWithFirebaseEmail: (email: string, password: string) => Promise<boolean>;
+  logoutFirebaseAdmin: () => Promise<void>;
   exportBackupJson: () => string;
   importBackupJson: (jsonText: string) => Promise<boolean>;
   resetToDemoData: () => Promise<void>;
@@ -165,6 +194,9 @@ function loadInitialLocalState(): AppDataState {
           competitionRules: parsed.competitionRules
             ? { ...getDefaultCompetitionRules(), ...parsed.competitionRules }
             : getDefaultCompetitionRules(),
+          customCompetitions: Array.isArray(parsed.customCompetitions)
+            ? parsed.customCompetitions
+            : [],
           importBatches: Array.isArray(parsed.importBatches) ? parsed.importBatches : [],
           auditLogs: Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [],
           adminPin: parsed.adminPin || INITIAL_SEED_DATA.adminPin,
@@ -183,10 +215,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     getSavedFirebaseConfig()
   );
   const [cloudMode, setCloudMode] = useState<'local' | 'firebase'>('local');
+  const [cloudConnectionState, setCloudConnectionState] = useState<CloudConnectionState>('local');
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'idle' | 'syncing' | 'connected' | 'error'>(
     'idle'
   );
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [firebaseUserEmail, setFirebaseUserEmail] = useState<string | null>(null);
+  const [preMigrationBackup, setPreMigrationBackup] = useState<PreMigrationBackupSnapshot | null>(
+    () => getPreMigrationBackupSnapshot()
+  );
+  const [lastMigrationReport, setLastMigrationReport] =
+    useState<MigrationVerificationReport | null>(null);
 
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
     try {
@@ -207,6 +246,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  const authUnsubRef = useRef<(() => void) | null>(null);
 
   const showToast = useCallback((text: string, tone: 'emerald' | 'crimson' | 'amber' = 'emerald') => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -214,7 +254,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3200);
   }, []);
 
-  // حفظ محلي + مزامنة فورية مع Firebase Firestore إن كان متصلاً
+  // حفظ محلي مزدوج (localStorage + IndexedDB) + مزامنة فورية مع Firebase Firestore إن كان متصلاً
   const commitState = useCallback(
     async (updater: (prev: AppDataState) => AppDataState) => {
       let nextState!: AppDataState;
@@ -228,34 +268,72 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch {
           // quota warning ignored safely
         }
+        saveStateToIndexedDB('main_app_state', nextState).catch(() => {});
         return nextState;
       });
 
       if (isFirebaseReady()) {
         setCloudSyncStatus('syncing');
         const saved = await saveCloudState(nextState);
-        setCloudSyncStatus(saved ? 'connected' : 'error');
-        if (!saved) {
-          setCloudError('تعذر الحفظ السحابي، تم الحفظ محلياً مؤقتاً.');
-        } else {
+        if (saved) {
+          setCloudSyncStatus('connected');
+          setCloudConnectionState('connected');
           setCloudError(null);
+        } else {
+          setCloudSyncStatus('error');
+          setCloudConnectionState('failed');
+          setCloudError('تعذر الحفظ السحابي، تم الحفظ محلياً في الجهاز.');
         }
       }
     },
     []
   );
 
-  // ربط Firebase تلقائياً عند التشغيل إن كانت الإعدادات موجودة
+  // ربط Firebase الفعلي وقراءة البيانات من السحابة ومزامنة البيانات المحلية دون تكرار أو فقدان
   const activateFirebase = useCallback(
     async (config: FirebaseCloudConfig, notify = false): Promise<boolean> => {
+      setCloudConnectionState('connecting');
       setCloudSyncStatus('syncing');
+      setCloudError(null);
+
+      // إنشاء نسخة احتياطية تلقائية قبل أي اتصال أو نقل سحابي
+      setData((currentLocal) => {
+        const snap = createPreMigrationBackupSnapshot(currentLocal);
+        setPreMigrationBackup(snap);
+        return currentLocal;
+      });
+
       const res = await initFirebaseCloud(config);
       if (!res.ok) {
         setCloudMode('local');
+        setCloudConnectionState('failed');
         setCloudSyncStatus('error');
         setCloudError(res.error || 'فشل الاتصال السحابي');
-        if (notify) showToast('تعذر الاتصال بـ Firebase — تحقق من الإعدادات', 'crimson');
+        if (notify) showToast('فشل الاتصال بـ Firebase — تحقق من الإعدادات', 'crimson');
         return false;
+      }
+
+      if (authUnsubRef.current) {
+        authUnsubRef.current();
+      }
+      authUnsubRef.current = subscribeToFirebaseAuth((user) => {
+        setFirebaseUserEmail(user?.email || (user?.isAnonymous ? 'جلسة مصادقة سحابية' : null));
+      });
+      await signInAnonymousIfAllowed();
+
+      // قراءة البيانات الموجودة في السحابة ودمجها مع البيانات المحلية بدون تكرار
+      const remoteExisting = await fetchCloudStateFromFirestore();
+      if (remoteExisting) {
+        setData((prevLocal) => {
+          const merged = mergeStatesWithoutDuplication(prevLocal, remoteExisting);
+          try {
+            localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(merged));
+          } catch {
+            // ignore
+          }
+          saveStateToIndexedDB('main_app_state', merged).catch(() => {});
+          return merged;
+        });
       }
 
       if (unsubRef.current) {
@@ -265,34 +343,66 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       unsubRef.current = subscribeToCloudState(
         (remoteState) => {
-          setData(remoteState);
-          try {
-            localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(remoteState));
-          } catch {
-            // ignore
-          }
+          setData((prevLocal) => {
+            const merged = mergeStatesWithoutDuplication(prevLocal, remoteState);
+            try {
+              localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(merged));
+            } catch {
+              // ignore
+            }
+            saveStateToIndexedDB('main_app_state', merged).catch(() => {});
+            return merged;
+          });
           setCloudSyncStatus('connected');
+          setCloudConnectionState('connected');
           setCloudError(null);
         },
         (err) => {
           setCloudSyncStatus('error');
+          setCloudConnectionState('failed');
           setCloudError(err);
         }
       );
 
       setCloudConfig(config);
       setCloudMode('firebase');
+      setCloudConnectionState('connected');
       setCloudSyncStatus('connected');
       setCloudError(null);
-      if (notify) showToast('تم الربط السحابي مع Firebase بنجاح — التحديثات فورية الآن', 'emerald');
+      if (notify) showToast('تم الاتصال السحابي الفعلي مع Firebase بنجاح', 'emerald');
       return true;
     },
     [showToast]
   );
 
+  // استرجاع البيانات من IndexedDB في حال تم مسح localStorage + تفعيل السحابة إن وجدت
   useEffect(() => {
-    // تهيئة العرض فقط أثناء شاشة الافتتاح دون طلب الإشعارات قبل اكتمال التهيئة
     initializeNativeDisplay();
+
+    // ضمان إنشاء نسخة احتياطية أولية وحفظها في IndexedDB
+    const rawLocal = localStorage.getItem(LOCAL_DATA_KEY);
+    if (!rawLocal) {
+      loadStateFromIndexedDB<AppDataState>('main_app_state').then((idbState) => {
+        if (idbState && Array.isArray(idbState.matches)) {
+          setData((prev) => {
+            const merged = mergeStatesWithoutDuplication(prev, idbState);
+            try {
+              localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(merged));
+            } catch {
+              // ignore
+            }
+            return merged;
+          });
+        }
+      });
+    } else {
+      saveStateToIndexedDB('main_app_state', data).catch(() => {});
+    }
+
+    if (!getPreMigrationBackupSnapshot()) {
+      const snap = createPreMigrationBackupSnapshot(data);
+      setPreMigrationBackup(snap);
+    }
 
     const saved = getSavedFirebaseConfig();
     if (saved) {
@@ -301,6 +411,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return () => {
       if (unsubRef.current) unsubRef.current();
+      if (authUnsubRef.current) authUnsubRef.current();
     };
   }, [activateFirebase]);
 
@@ -328,7 +439,32 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
-  // إدارة صلاحية المالك
+  // قراءة البيانات من السحابة فوراً عند تسجيل الدخول
+  const pullDataFromCloudNow = useCallback(async (): Promise<boolean> => {
+    if (!isFirebaseReady()) return false;
+    setCloudSyncStatus('syncing');
+    const remote = await fetchCloudStateFromFirestore();
+    if (!remote) {
+      setCloudSyncStatus('connected');
+      return false;
+    }
+    setData((prev) => {
+      const merged = mergeStatesWithoutDuplication(prev, remote);
+      try {
+        localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(merged));
+      } catch {
+        // ignore
+      }
+      saveStateToIndexedDB('main_app_state', merged).catch(() => {});
+      return merged;
+    });
+    setCloudSyncStatus('connected');
+    setCloudConnectionState('connected');
+    showToast('تم استرجاع ومزامنة أحدث البيانات من السحابة بنجاح', 'emerald');
+    return true;
+  }, [showToast]);
+
+  // إدارة صلاحية المالك (وعند تسجيل الدخول يقرأ البيانات من السحابة تلقائياً إن كانت متصلة)
   const unlockAdmin = useCallback(
     (pin: string) => {
       if (pin.trim() === data.adminPin.trim()) {
@@ -338,13 +474,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch {
           // ignore
         }
+        if (isFirebaseReady()) {
+          pullDataFromCloudNow();
+        }
         showToast('أهلاً بك في لوحة تحكم وتين سبورت', 'emerald');
         return true;
       }
       showToast('رمز الدخول غير صحيح', 'crimson');
       return false;
     },
-    [data.adminPin, showToast]
+    [data.adminPin, pullDataFromCloudNow, showToast]
   );
 
   const lockAdmin = useCallback(() => {
@@ -1330,13 +1469,173 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [commitState, showToast]
   );
 
+  // إضافة أو تعديل بطولة مخصصة جديدة
+  const saveCustomCompetition = useCallback(
+    async (comp: CustomCompetitionItem) => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
+      await commitState((prev) => {
+        const list = prev.customCompetitions || [];
+        const exists = list.some((c) => c.id === comp.id);
+        const customCompetitions = exists
+          ? list.map((c) => (c.id === comp.id ? comp : c))
+          : [comp, ...list];
+        return { ...prev, customCompetitions };
+      });
+      showToast(`تم حفظ البطولة "${comp.name}" ومزامنتها بنجاح`, 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const deleteCustomCompetition = useCallback(
+    async (id: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        customCompetitions: (prev.customCompetitions || []).filter((c) => c.id !== id),
+      }));
+      showToast('تم حذف البطولة المخصصة', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  // السحابة والنسخ الاحتياطي والتحقق من النقل
+  const createBackupSnapshotNow = useCallback((): PreMigrationBackupSnapshot => {
+    const snap = createPreMigrationBackupSnapshot(data);
+    setPreMigrationBackup(snap);
+    showToast('تم إنشاء وحفظ نسخة احتياطية محلية محمية قبل النقل', 'emerald');
+    return snap;
+  }, [data, showToast]);
+
+  const restorePreMigrationBackup = useCallback(async (): Promise<boolean> => {
+    const snap = getPreMigrationBackupSnapshot() || preMigrationBackup;
+    if (!snap || !snap.state) {
+      showToast('لا توجد نسخة احتياطية محفوظة للاستعادة', 'crimson');
+      return false;
+    }
+    await commitState(() => snap.state);
+    showToast(`تمت استعادة النسخة الاحتياطية (${snap.backupId}) بنجاح`, 'emerald');
+    return true;
+  }, [commitState, preMigrationBackup, showToast]);
+
+  const migrateLocalDataToCloudVerified =
+    useCallback(async (): Promise<MigrationVerificationReport> => {
+      const snap = createPreMigrationBackupSnapshot(data);
+      setPreMigrationBackup(snap);
+
+      if (!isFirebaseReady()) {
+        const failedReport: MigrationVerificationReport = {
+          ok: false,
+          backupId: snap.backupId,
+          backupCreatedAt: snap.createdAt,
+          countsMatched: false,
+          localCounts: snap.counts,
+          cloudCounts: {
+            competitionsCount: 0,
+            teamsCount: 0,
+            matchesCount: 0,
+            standingsCount: 0,
+            scorersCount: 0,
+            goalkeepersCount: 0,
+            articlesCount: 0,
+            importsCount: 0,
+          },
+          migratedAt: new Date().toISOString(),
+          error: 'غير متصل بـ Firebase؛ يرجى تفعيل الربط أولاً',
+        };
+        setLastMigrationReport(failedReport);
+        showToast(failedReport.error!, 'crimson');
+        return failedReport;
+      }
+
+      setCloudSyncStatus('syncing');
+      setCloudConnectionState('connecting');
+
+      const { report, mergedState } = await migrateLocalDataToFirestoreWithVerification(data);
+      setLastMigrationReport(report);
+
+      if (report.ok && report.countsMatched) {
+        setData(mergedState);
+        try {
+          localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(mergedState));
+        } catch {
+          // ignore
+        }
+        saveStateToIndexedDB('main_app_state', mergedState).catch(() => {});
+        setCloudSyncStatus('connected');
+        setCloudConnectionState('connected');
+        setCloudError(null);
+        showToast(
+          'تم نقل جميع البيانات المحلية إلى Firestore والتحقق من تطابق عدد السجلات 100%',
+          'emerald'
+        );
+      } else {
+        setCloudSyncStatus('error');
+        setCloudConnectionState('failed');
+        setCloudError(report.error || 'فشل التحقق من تطابق السجلات');
+        showToast(report.error || 'تعذر إتمام النقل السحابي — النسخة المحلية محفوظة بأمان', 'crimson');
+      }
+      return report;
+    }, [data, showToast]);
+
+  const loginAdminWithFirebaseEmail = useCallback(
+    async (email: string, password: string): Promise<boolean> => {
+      if (!isFirebaseReady()) {
+        showToast('قم بتوصيل إعدادات Firebase أولاً قبل تسجيل الدخول السحابي', 'crimson');
+        return false;
+      }
+      setCloudConnectionState('connecting');
+      const res = await signInAdminWithFirebaseEmail(email, password);
+      if (!res.ok) {
+        setCloudConnectionState('failed');
+        setCloudError(res.error || 'فشل تسجيل الدخول السحابي');
+        showToast(res.error || 'فشل تسجيل الدخول عبر Firebase Auth', 'crimson');
+        return false;
+      }
+      setFirebaseUserEmail(res.userEmail || email.trim());
+      setIsAdminUnlocked(true);
+      try {
+        sessionStorage.setItem(ADMIN_SESSION_KEY, 'unlocked');
+      } catch {
+        // ignore
+      }
+      await pullDataFromCloudNow();
+      setCloudConnectionState('connected');
+      showToast(`تم تسجيل الدخول السحابي (${res.userEmail}) واسترجاع البيانات`, 'emerald');
+      return true;
+    },
+    [pullDataFromCloudNow, showToast]
+  );
+
+  const logoutFirebaseAdmin = useCallback(async () => {
+    await signOutFirebaseAdmin();
+    setFirebaseUserEmail(null);
+    showToast('تم تسجيل الخروج من جلسة Firebase Auth', 'amber');
+  }, [showToast]);
+
   // السحابة والنسخ الاحتياطي
   const connectFirebase = useCallback(
     async (config: FirebaseCloudConfig) => {
       saveFirebaseConfig(config);
-      return await activateFirebase(config, true);
+      const ok = await activateFirebase(config, true);
+      if (ok) {
+        const { report, mergedState } = await migrateLocalDataToFirestoreWithVerification(data);
+        setLastMigrationReport(report);
+        if (report.ok) {
+          setData(mergedState);
+          try {
+            localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(mergedState));
+          } catch {
+            // ignore
+          }
+          saveStateToIndexedDB('main_app_state', mergedState).catch(() => {});
+        }
+      }
+      return ok;
     },
-    [activateFirebase]
+    [activateFirebase, data]
   );
 
   const disconnectFirebase = useCallback(async () => {
@@ -1344,29 +1643,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       unsubRef.current();
       unsubRef.current = null;
     }
+    if (authUnsubRef.current) {
+      authUnsubRef.current();
+      authUnsubRef.current = null;
+    }
     await teardownFirebaseCloud();
     saveFirebaseConfig(null);
     setCloudConfig(null);
     setCloudMode('local');
+    setCloudConnectionState('local');
     setCloudSyncStatus('idle');
     setCloudError(null);
-    showToast('تم التحويل إلى الوضع المحلي', 'amber');
+    setFirebaseUserEmail(null);
+    showToast('تم التحويل إلى الوضع المحلي (بياناتك المحلية محفوظة بالكامل)', 'amber');
   }, [showToast]);
 
   const pushCurrentDataToCloud = useCallback(async () => {
-    if (!isFirebaseReady()) {
-      showToast('قم بربط إعدادات Firebase أولاً', 'crimson');
-      return false;
-    }
-    setCloudSyncStatus('syncing');
-    const ok = await saveCloudState(data);
-    setCloudSyncStatus(ok ? 'connected' : 'error');
-    showToast(
-      ok ? 'تم رفع ومزامنة جميع البيانات للسحابة بنجاح' : 'فشل الرفع للسحابة — تحقق من قواعد Firestore',
-      ok ? 'emerald' : 'crimson'
-    );
-    return ok;
-  }, [data, showToast]);
+    const report = await migrateLocalDataToCloudVerified();
+    return report.ok;
+  }, [migrateLocalDataToCloudVerified]);
 
   const exportBackupJson = useCallback(() => JSON.stringify(data, null, 2), [data]);
 
@@ -1402,9 +1697,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       value={{
         data,
         cloudMode,
+        cloudConnectionState,
         cloudConfig,
         cloudSyncStatus,
         cloudError,
+        firebaseUserEmail,
+        preMigrationBackup,
+        lastMigrationReport,
         toast,
         showToast,
         unreadNotificationsCount,
@@ -1428,6 +1727,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         saveGoalkeeper,
         deleteGoalkeeper,
         saveCompetitionRule,
+        saveCustomCompetition,
+        deleteCustomCompetition,
         recalculateCompetitionStandings,
         registerNewTeam,
         linkAliasToExistingTeam,
@@ -1449,6 +1750,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         connectFirebase,
         disconnectFirebase,
         pushCurrentDataToCloud,
+        pullDataFromCloudNow,
+        migrateLocalDataToCloudVerified,
+        createBackupSnapshotNow,
+        restorePreMigrationBackup,
+        loginAdminWithFirebaseEmail,
+        logoutFirebaseAdmin,
         exportBackupJson,
         importBackupJson,
         resetToDemoData,

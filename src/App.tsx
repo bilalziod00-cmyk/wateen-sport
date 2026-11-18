@@ -22,7 +22,7 @@ import { CinematicSplashScreen } from './components/CinematicSplashScreen';
 const WateenShell: React.FC = () => {
   const {
     data,
-    cloudMode,
+    cloudConnectionState,
     toast,
     unreadNotificationsCount,
     markNotificationsRead,
@@ -95,13 +95,27 @@ const WateenShell: React.FC = () => {
           </button>
 
           <div className="flex items-center gap-2">
-            {/* مؤشر المزامنة السحابية */}
-            {cloudMode === 'firebase' && (
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-extrabold text-emerald-300">
-                <Cloud className="w-3 h-3" />
-                متصل لحظياً
-              </span>
-            )}
+            {/* مؤشر المزامنة السحابية الرسمي (محلي / جاري الاتصال / متصل بالسحابة / فشل الاتصال) */}
+            <span
+              className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${
+                cloudConnectionState === 'connected'
+                  ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300'
+                  : cloudConnectionState === 'connecting'
+                  ? 'bg-sky-500/15 border-sky-500/35 text-sky-300 animate-pulse'
+                  : cloudConnectionState === 'failed'
+                  ? 'bg-rose-500/15 border-rose-500/35 text-rose-300'
+                  : 'bg-amber-500/15 border-amber-500/35 text-amber-300'
+              }`}
+            >
+              <Cloud className="w-3 h-3" />
+              {cloudConnectionState === 'connected'
+                ? 'متصل بالسحابة'
+                : cloudConnectionState === 'connecting'
+                ? 'جاري الاتصال'
+                : cloudConnectionState === 'failed'
+                ? 'فشل الاتصال'
+                : 'محلي'}
+            </span>
 
             {/* زر جرس الإشعارات */}
             <button

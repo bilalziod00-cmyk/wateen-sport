@@ -34,12 +34,21 @@ type AdminTab =
   | 'cloud';
 
 export const AdminDashboardPage: React.FC = () => {
-  const { data, isAdminUnlocked, lockAdmin, cloudMode } = useAppData();
+  const { data, isAdminUnlocked, lockAdmin, cloudConnectionState } = useAppData();
   const [tab, setTab] = useState<AdminTab>('smart_import');
 
   if (!isAdminUnlocked) {
     return <AdminLockScreen />;
   }
+
+  const connectionLabel =
+    cloudConnectionState === 'connected'
+      ? 'متصل بالسحابة'
+      : cloudConnectionState === 'connecting'
+      ? 'جاري الاتصال'
+      : cloudConnectionState === 'failed'
+      ? 'فشل الاتصال'
+      : 'محلي';
 
   const breakingCount = data.articles.filter((a) => a.isBreaking).length;
   const liveCount = data.matches.filter((m) => m.status === 'live').length;
@@ -82,7 +91,7 @@ export const AdminDashboardPage: React.FC = () => {
                 لوحة التحكم الإدارية — وتين سبورت | WATEEN SPORT
               </h1>
               <p className="text-[11px] text-slate-300">
-                الإدخال الذكي بالذكاء الاصطناعي وإدارة البطولات ({cloudMode === 'firebase' ? 'متصل بالسحابة' : 'وضع محلي'})
+                الإدخال الذكي بالذكاء الاصطناعي وإدارة البطولات (حالة الاتصال: {connectionLabel})
               </p>
             </div>
           </div>

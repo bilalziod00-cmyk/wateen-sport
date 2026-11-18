@@ -420,6 +420,20 @@ export interface FirebaseCloudConfig {
   appId: string;
 }
 
+export interface CustomCompetitionItem {
+  id: string;
+  name: string;
+  shortName: string;
+  season: string;
+  ageCategory: string;
+  tierLabel: string;
+  parentCompetitionId: CompetitionId;
+  groups: string[];
+  createdAt: string;
+}
+
+export type CloudConnectionState = 'local' | 'connecting' | 'connected' | 'failed';
+
 export interface AppDataState {
   articles: NewsArticle[];
   matches: MatchItem[];
@@ -428,6 +442,7 @@ export interface AppDataState {
   goalkeepers?: GoalkeeperStat[];
   teamsDirectory?: TeamDirectoryItem[];
   competitionRules?: Record<string, CompetitionRuleConfig>;
+  customCompetitions?: CustomCompetitionItem[];
   importBatches?: SmartImportBatch[];
   auditLogs?: ImportRevisionEntry[];
   banners: HeroBanner[];
