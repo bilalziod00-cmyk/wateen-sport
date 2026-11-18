@@ -1,11 +1,66 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // بيانات تطبيق وتين سبورت (قراءة للجميع، وتحديث من التطبيق)
-    // ملاحظة أمنية: عند التوسع يوصى بتفعيل Firebase Authentication وتقييد الكتابة على بريد المالك فقط
+
+    // التحقق من صلاحية المدير من جهة الخادم باستخدام Firebase Auth Custom Claims
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin'
+      );
+    }
+
+    // مجموعات البطولات والمواسم والفرق والمباريات والنتائج والترتيب واللاعبين والحراس
+    match /competitions/{compId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /seasons/{seasonId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /standings/{standingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /goalkeepers/{gkId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // عمليات الاستيراد الذكي وسجل المراجعات والتعديلات (للمديرين فقط)
+    match /imports/{batchId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // سجل المراجعات غير قابل للحذف أو التلاعب
+    }
+
+    // حالة التطبيق الموحدة (قراءة للجميع، وتعديل للمدير المعتمد)
     match /wateen_app/{docId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
 
     // رموز أجهزة أندرويد لاستقبال إشعارات FCM
@@ -17,7 +72,7 @@ service cloud.firestore {
     // طابور إرسال الإشعارات الفورية من لوحة التحكم
     match /push_requests/{reqId} {
       allow read: if false;
-      allow create: if true;
+      allow create: if isAdmin();
     }
   }
 }

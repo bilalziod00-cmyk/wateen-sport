@@ -3,17 +3,35 @@ import {
   AppDataState,
   AppNotification,
   CompetitionId,
+  CompetitionRuleConfig,
   FirebaseCloudConfig,
+  GoalkeeperStat,
   HeroBanner,
+  ImportRevisionEntry,
   LiveStreamItem,
   MatchItem,
   MatchStatus,
   NewsArticle,
+  SmartImportBatch,
   SportsGraphicCard,
   StandingRow,
+  TeamDirectoryItem,
   TopScorer,
 } from '../types/sports';
 import { INITIAL_SEED_DATA } from '../data/seedData';
+import {
+  getDefaultCompetitionRules,
+  INITIAL_JORDAN_TEAMS_DIRECTORY,
+} from '../constants/competitions';
+import {
+  applyApprovedMatchResultToStandings,
+  isDuplicateMatchItem,
+  normalizeArabicTeamName,
+  recalculateStandingsForCompetition,
+  sortStandingsByCompetitionRules,
+  UNCLEAR_VALUE_MARKER,
+} from '../utils/sportsMathEngine';
+import { validateExtractedImportRows } from '../utils/aiSmartImportEngine';
 import {
   getSavedFirebaseConfig,
   initFirebaseCloud,
@@ -71,11 +89,29 @@ interface AppDataContextValue {
   adjustMatchScore: (id: string, side: 'home' | 'away', delta: number) => Promise<void>;
   updateMatchLiveState: (id: string, status: MatchStatus, liveMinute?: number) => Promise<void>;
 
-  // إدارة الترتيب والهدافين
+  // إدارة الترتيب والهدافين والحراس وقواعد البطولات
   saveStandingRow: (row: StandingRow) => Promise<void>;
   deleteStandingRow: (id: string) => Promise<void>;
   saveScorer: (scorer: TopScorer) => Promise<void>;
   deleteScorer: (id: string) => Promise<void>;
+  saveGoalkeeper: (gk: GoalkeeperStat) => Promise<void>;
+  deleteGoalkeeper: (id: string) => Promise<void>;
+  saveCompetitionRule: (rule: CompetitionRuleConfig) => Promise<void>;
+  recalculateCompetitionStandings: (competitionId: CompetitionId) => Promise<void>;
+  registerNewTeam: (team: {
+    name: string;
+    shortName?: string;
+    color?: string;
+    competitionId: CompetitionId;
+    city?: string;
+  }) => Promise<TeamDirectoryItem>;
+  linkAliasToExistingTeam: (aliasName: string, targetCanonicalName: string) => Promise<void>;
+
+  // مركز الإدخال الذكي (AI Sports Data Import) والمراجعة والاعتماد
+  saveImportBatch: (batch: SmartImportBatch) => Promise<void>;
+  approveAndPublishImportBatch: (batchId: string, actorName?: string) => Promise<boolean>;
+  rejectImportBatch: (batchId: string, reason: string, actorName?: string) => Promise<void>;
+  deleteImportBatch: (batchId: string) => Promise<void>;
 
   // إدارة البنرات والبطاقات الرياضية والصور والبث المباشر
   saveBanner: (banner: HeroBanner) => Promise<void>;
@@ -120,6 +156,17 @@ function loadInitialLocalState(): AppDataState {
           liveStreams: Array.isArray(parsed.liveStreams)
             ? parsed.liveStreams
             : INITIAL_SEED_DATA.liveStreams,
+          goalkeepers: Array.isArray(parsed.goalkeepers)
+            ? parsed.goalkeepers
+            : INITIAL_SEED_DATA.goalkeepers,
+          teamsDirectory: Array.isArray(parsed.teamsDirectory)
+            ? parsed.teamsDirectory
+            : INITIAL_JORDAN_TEAMS_DIRECTORY,
+          competitionRules: parsed.competitionRules
+            ? { ...getDefaultCompetitionRules(), ...parsed.competitionRules }
+            : getDefaultCompetitionRules(),
+          importBatches: Array.isArray(parsed.importBatches) ? parsed.importBatches : [],
+          auditLogs: Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [],
           adminPin: parsed.adminPin || INITIAL_SEED_DATA.adminPin,
         };
       }
@@ -370,91 +417,205 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   }, []);
 
-  // المباريات
+  // المباريات (مع منع التكرار وتحديث جدول الترتيب تلقائياً عند اعتماد أو تعديل نتيجة مباراة)
   const saveMatch = useCallback(
     async (match: MatchItem) => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب تسجيل الدخول إلى لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
+
+      let blockedByDuplicate = false;
       await commitState((prev) => {
-        const exists = prev.matches.some((m) => m.id === match.id);
+        const previousMatch = prev.matches.find((m) => m.id === match.id) || null;
+        if (!previousMatch) {
+          const dup = isDuplicateMatchItem(match, prev.matches);
+          if (dup) {
+            blockedByDuplicate = true;
+            return prev;
+          }
+        }
+
+        const approvedMatch: MatchItem = { ...match, isApproved: true };
+        const exists = prev.matches.some((m) => m.id === approvedMatch.id);
         const matches = exists
-          ? prev.matches.map((m) => (m.id === match.id ? match : m))
-          : [match, ...prev.matches];
-        return { ...prev, matches };
+          ? prev.matches.map((m) => (m.id === approvedMatch.id ? approvedMatch : m))
+          : [approvedMatch, ...prev.matches];
+
+        const rule = prev.competitionRules?.[approvedMatch.competitionId];
+        const directory = prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY;
+        const standings =
+          approvedMatch.status === 'finished' || previousMatch?.status === 'finished'
+            ? applyApprovedMatchResultToStandings(
+                approvedMatch,
+                previousMatch,
+                prev.standings,
+                matches,
+                rule,
+                directory
+              )
+            : prev.standings;
+
+        const auditEntry: ImportRevisionEntry = {
+          id: `aud-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actor: 'مدير النظام',
+          action: previousMatch ? 'UPDATE_MATCH_RESULT' : 'CREATE_MATCH',
+          details: `${previousMatch ? 'تعديل' : 'إضافة'} مباراة: ${approvedMatch.homeTeam} (${approvedMatch.homeScore}) - (${approvedMatch.awayScore}) ${approvedMatch.awayTeam} [${approvedMatch.round}]`,
+        };
+
+        return {
+          ...prev,
+          matches,
+          standings,
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 100),
+        };
       });
-      showToast('تم حفظ بيانات المباراة بنجاح', 'emerald');
+
+      if (blockedByDuplicate) {
+        showToast('تنبيه: هذه المباراة مسجلة مسبقاً في نفس البطولة والجولة!', 'crimson');
+      } else {
+        showToast('تم حفظ المباراة وتحديث جدول الترتيب تلقائياً', 'emerald');
+      }
     },
-    [commitState, showToast]
+    [commitState, isAdminUnlocked, showToast]
   );
 
   const deleteMatch = useCallback(
     async (id: string) => {
-      await commitState((prev) => ({
-        ...prev,
-        matches: prev.matches.filter((m) => m.id !== id),
-      }));
-      showToast('تم حذف المباراة', 'amber');
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
+      await commitState((prev) => {
+        const target = prev.matches.find((m) => m.id === id) || null;
+        const matches = prev.matches.filter((m) => m.id !== id);
+        let standings = prev.standings;
+        if (target && target.status === 'finished') {
+          standings = applyApprovedMatchResultToStandings(
+            { ...target, status: 'upcoming' },
+            target,
+            prev.standings,
+            matches,
+            prev.competitionRules?.[target.competitionId],
+            prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY
+          );
+        }
+        return { ...prev, matches, standings };
+      });
+      showToast('تم حذف المباراة وتحديث الترتيب', 'amber');
     },
-    [commitState, showToast]
+    [commitState, isAdminUnlocked, showToast]
   );
 
   const adjustMatchScore = useCallback(
     async (id: string, side: 'home' | 'away', delta: number) => {
-      await commitState((prev) => ({
-        ...prev,
-        matches: prev.matches.map((m) => {
-          if (m.id !== id) return m;
-          return side === 'home'
-            ? { ...m, homeScore: Math.max(0, m.homeScore + delta) }
-            : { ...m, awayScore: Math.max(0, m.awayScore + delta) };
-        }),
-      }));
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
+      await commitState((prev) => {
+        const previousMatch = prev.matches.find((m) => m.id === id) || null;
+        if (!previousMatch) return prev;
+        const updatedMatch: MatchItem =
+          side === 'home'
+            ? { ...previousMatch, homeScore: Math.max(0, previousMatch.homeScore + delta) }
+            : { ...previousMatch, awayScore: Math.max(0, previousMatch.awayScore + delta) };
+
+        const matches = prev.matches.map((m) => (m.id === id ? updatedMatch : m));
+        const standings =
+          updatedMatch.status === 'finished'
+            ? applyApprovedMatchResultToStandings(
+                updatedMatch,
+                previousMatch,
+                prev.standings,
+                matches,
+                prev.competitionRules?.[updatedMatch.competitionId],
+                prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY
+              )
+            : prev.standings;
+        return { ...prev, matches, standings };
+      });
     },
-    [commitState]
+    [commitState, isAdminUnlocked, showToast]
   );
 
   const updateMatchLiveState = useCallback(
     async (id: string, status: MatchStatus, liveMinute?: number) => {
-      await commitState((prev) => ({
-        ...prev,
-        matches: prev.matches.map((m) =>
-          m.id === id
-            ? { ...m, status, liveMinute: status === 'live' ? liveMinute ?? m.liveMinute ?? 1 : undefined }
-            : m
-        ),
-      }));
-      showToast('تم تحديث حالة المباراة فوراً', 'emerald');
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
+      await commitState((prev) => {
+        const previousMatch = prev.matches.find((m) => m.id === id) || null;
+        if (!previousMatch) return prev;
+        const updatedMatch: MatchItem = {
+          ...previousMatch,
+          status,
+          liveMinute: status === 'live' ? liveMinute ?? previousMatch.liveMinute ?? 1 : undefined,
+        };
+        const matches = prev.matches.map((m) => (m.id === id ? updatedMatch : m));
+        const standings =
+          status === 'finished' || previousMatch.status === 'finished'
+            ? applyApprovedMatchResultToStandings(
+                updatedMatch,
+                previousMatch,
+                prev.standings,
+                matches,
+                prev.competitionRules?.[updatedMatch.competitionId],
+                prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY
+              )
+            : prev.standings;
+        return { ...prev, matches, standings };
+      });
+      showToast('تم تحديث حالة المباراة والترتيب فوراً', 'emerald');
     },
-    [commitState, showToast]
+    [commitState, isAdminUnlocked, showToast]
   );
 
   // جداول الترتيب
   const saveStandingRow = useCallback(
     async (row: StandingRow) => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
       await commitState((prev) => {
         const exists = prev.standings.some((s) => s.id === row.id);
-        const standings = exists
+        const rawStandings = exists
           ? prev.standings.map((s) => (s.id === row.id ? row : s))
           : [...prev.standings, row];
-        return { ...prev, standings };
+
+        const compRows = rawStandings.filter((s) => s.competitionId === row.competitionId);
+        const otherRows = rawStandings.filter((s) => s.competitionId !== row.competitionId);
+        const sortedComp = sortStandingsByCompetitionRules(
+          compRows,
+          prev.matches.filter((m) => m.competitionId === row.competitionId && m.status === 'finished'),
+          prev.competitionRules?.[row.competitionId]
+        );
+        return { ...prev, standings: [...otherRows, ...sortedComp] };
       });
-      showToast('تم تحديث جدول الترتيب بنجاح', 'emerald');
+      showToast('تم تحديث وإعادة ترتيب الجدول بنجاح', 'emerald');
     },
-    [commitState, showToast]
+    [commitState, isAdminUnlocked, showToast]
   );
 
   const deleteStandingRow = useCallback(
     async (id: string) => {
+      if (!isAdminUnlocked) return;
       await commitState((prev) => ({
         ...prev,
         standings: prev.standings.filter((s) => s.id !== id),
       }));
       showToast('تم حذف الفريق من الجدول', 'amber');
     },
-    [commitState, showToast]
+    [commitState, isAdminUnlocked, showToast]
   );
 
-  // الهدافون
+  // الهدافون والحراس وقواعد البطولات
   const saveScorer = useCallback(
     async (scorer: TopScorer) => {
+      if (!isAdminUnlocked) return;
       await commitState((prev) => {
         const exists = prev.scorers.some((s) => s.id === scorer.id);
         const scorers = exists
@@ -464,18 +625,522 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
       showToast('تم حفظ بيانات الهداف بنجاح', 'emerald');
     },
-    [commitState, showToast]
+    [commitState, isAdminUnlocked, showToast]
   );
 
   const deleteScorer = useCallback(
     async (id: string) => {
+      if (!isAdminUnlocked) return;
       await commitState((prev) => ({
         ...prev,
         scorers: prev.scorers.filter((s) => s.id !== id),
       }));
       showToast('تم حذف اللاعب من قائمة الهدافين', 'amber');
     },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const saveGoalkeeper = useCallback(
+    async (gk: GoalkeeperStat) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => {
+        const list = prev.goalkeepers || [];
+        const exists = list.some((g) => g.id === gk.id);
+        const goalkeepers = exists
+          ? list.map((g) => (g.id === gk.id ? gk : g))
+          : [...list, gk];
+        return { ...prev, goalkeepers };
+      });
+      showToast('تم حفظ إحصائيات حارس المرمى بنجاح', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const deleteGoalkeeper = useCallback(
+    async (id: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        goalkeepers: (prev.goalkeepers || []).filter((g) => g.id !== id),
+      }));
+      showToast('تم حذف حارس المرمى من القائمة', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const saveCompetitionRule = useCallback(
+    async (rule: CompetitionRuleConfig) => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
+      await commitState((prev) => {
+        const rules = {
+          ...(prev.competitionRules || getDefaultCompetitionRules()),
+          [rule.competitionId]: { ...rule, updatedAt: new Date().toISOString() },
+        };
+        const compRows = prev.standings.filter((s) => s.competitionId === rule.competitionId);
+        const otherRows = prev.standings.filter((s) => s.competitionId !== rule.competitionId);
+        const recalculatedRows = compRows.map((r) => ({
+          ...r,
+          points: Math.max(
+            0,
+            r.won * rule.pointsWin +
+              r.drawn * rule.pointsDraw +
+              r.lost * rule.pointsLoss -
+              (r.pointsDeducted || 0)
+          ),
+        }));
+        const sortedComp = sortStandingsByCompetitionRules(
+          recalculatedRows,
+          prev.matches.filter(
+            (m) => m.competitionId === rule.competitionId && m.status === 'finished'
+          ),
+          rule
+        );
+        return {
+          ...prev,
+          competitionRules: rules,
+          standings: [...otherRows, ...sortedComp],
+        };
+      });
+      showToast('تم حفظ لائحة البطولة وإعادة احتساب الترتيب تلقائياً', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const recalculateCompetitionStandings = useCallback(
+    async (competitionId: CompetitionId) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => {
+        const rule = prev.competitionRules?.[competitionId];
+        const directory = prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY;
+        const standings = recalculateStandingsForCompetition(
+          competitionId,
+          prev.matches,
+          prev.standings,
+          rule,
+          directory
+        );
+        return { ...prev, standings };
+      });
+      showToast('تمت إعادة حساب الترتيب من النتائج المعتمدة', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const registerNewTeam = useCallback(
+    async (team: {
+      name: string;
+      shortName?: string;
+      color?: string;
+      competitionId: CompetitionId;
+      city?: string;
+    }): Promise<TeamDirectoryItem> => {
+      const cleanName = team.name.trim();
+      const newTeam: TeamDirectoryItem = {
+        id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: cleanName,
+        shortName: (team.shortName || cleanName.replace(/^نادي\s+/, '')).slice(0, 12),
+        color: team.color || '#10B981',
+        competitionId: team.competitionId,
+        city: team.city || 'الأردن',
+        aliases: [cleanName],
+      };
+
+      await commitState((prev) => {
+        const dir = prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY;
+        const exists = dir.some(
+          (t) => normalizeArabicTeamName(t.name) === normalizeArabicTeamName(cleanName)
+        );
+        const teamsDirectory = exists ? dir : [...dir, newTeam];
+        return { ...prev, teamsDirectory };
+      });
+      showToast(`تم تسجيل فريق "${cleanName}" في دليل الأندية المعتمدة`, 'emerald');
+      return newTeam;
+    },
     [commitState, showToast]
+  );
+
+  const linkAliasToExistingTeam = useCallback(
+    async (aliasName: string, targetCanonicalName: string) => {
+      const cleanAlias = aliasName.trim();
+      if (!cleanAlias) return;
+      await commitState((prev) => {
+        const dir = prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY;
+        const normTarget = normalizeArabicTeamName(targetCanonicalName);
+        const teamsDirectory = dir.map((t) => {
+          if (normalizeArabicTeamName(t.name) !== normTarget) return t;
+          const aliases = Array.from(new Set([...(t.aliases || []), cleanAlias]));
+          return { ...t, aliases };
+        });
+        return { ...prev, teamsDirectory };
+      });
+      showToast(`تم ربط الاسم "${cleanAlias}" بالنادي "${targetCanonicalName}"`, 'emerald');
+    },
+    [commitState, showToast]
+  );
+
+  // ============================================================================
+  // مركز الإدخال الذكي (AI Sports Data Import) والمراجعة والاعتماد
+  // ============================================================================
+  const saveImportBatch = useCallback(
+    async (batch: SmartImportBatch) => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return;
+      }
+      await commitState((prev) => {
+        const list = prev.importBatches || [];
+        const exists = list.some((b) => b.id === batch.id);
+        const importBatches = exists
+          ? list.map((b) => (b.id === batch.id ? { ...batch, updatedAt: new Date().toISOString() } : b))
+          : [batch, ...list];
+        return { ...prev, importBatches };
+      });
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const approveAndPublishImportBatch = useCallback(
+    async (batchId: string, actorName = 'مدير النظام'): Promise<boolean> => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: لا يمكن لغير المدير اعتماد البيانات ونشرها', 'crimson');
+        return false;
+      }
+
+      const targetBatch = (data.importBatches || []).find((b) => b.id === batchId);
+      if (!targetBatch) {
+        showToast('عملية الاستيراد غير موجودة', 'crimson');
+        return false;
+      }
+
+      // طبقة التحقق الإلزامية قبل الاعتماد النهائي
+      const revalidatedRows = validateExtractedImportRows(
+        targetBatch.rows,
+        targetBatch.dataType,
+        targetBatch.competitionId,
+        data.matches,
+        data.standings,
+        data.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY,
+        data.competitionRules?.[targetBatch.competitionId]
+      );
+
+      const hasBlockingIssues = revalidatedRows.some(
+        (r) => r.isUnclear || r.isDuplicate || r.hasConflict
+      );
+
+      if (hasBlockingIssues || revalidatedRows.length === 0) {
+        await commitState((prev) => ({
+          ...prev,
+          importBatches: (prev.importBatches || []).map((b) =>
+            b.id === batchId
+              ? { ...b, rows: revalidatedRows, status: 'Needs Correction', updatedAt: new Date().toISOString() }
+              : b
+          ),
+        }));
+        showToast(
+          'تم رفض الاعتماد التلقائي: توجد قيم "غير واضح" أو تكرار أو تعارض حسابي يجب تصحيحها أولاً',
+          'crimson'
+        );
+        return false;
+      }
+
+      const nowIso = new Date().toISOString();
+
+      await commitState((prev) => {
+        let nextMatches = [...prev.matches];
+        let nextStandings = [...prev.standings];
+        let nextScorers = [...prev.scorers];
+        let nextGoalkeepers = [...(prev.goalkeepers || [])];
+        let nextDirectory = [...(prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY)];
+        const rule =
+          prev.competitionRules?.[targetBatch.competitionId] ||
+          getDefaultCompetitionRules()[targetBatch.competitionId];
+
+        const ensureTeamInDirectory = (name: string) => {
+          const clean = (name || '').trim();
+          if (!clean || clean === UNCLEAR_VALUE_MARKER) return;
+          const norm = normalizeArabicTeamName(clean);
+          if (!nextDirectory.some((t) => normalizeArabicTeamName(t.name) === norm)) {
+            nextDirectory.push({
+              id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              name: clean,
+              shortName: clean.replace(/^نادي\s+/, '').slice(0, 12),
+              color: '#10B981',
+              competitionId: targetBatch.competitionId,
+              groupName: targetBatch.groupName,
+              aliases: [clean],
+            });
+          }
+        };
+
+        if (targetBatch.dataType === 'standings_table') {
+          const otherStandings = nextStandings.filter(
+            (s) => s.competitionId !== targetBatch.competitionId
+          );
+          const compStandings = nextStandings.filter(
+            (s) => s.competitionId === targetBatch.competitionId
+          );
+
+          for (const r of revalidatedRows) {
+            const tName = String(r.teamName || '').trim();
+            if (!tName) continue;
+            ensureTeamInDirectory(tName);
+            const norm = normalizeArabicTeamName(tName);
+            const existingIdx = compStandings.findIndex(
+              (s) => normalizeArabicTeamName(s.teamName) === norm
+            );
+            const rowObj: StandingRow = {
+              id:
+                existingIdx >= 0
+                  ? compStandings[existingIdx].id
+                  : `st-${targetBatch.competitionId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              competitionId: targetBatch.competitionId,
+              season: targetBatch.season,
+              groupName: targetBatch.groupName,
+              teamName: tName,
+              shortName:
+                existingIdx >= 0
+                  ? compStandings[existingIdx].shortName
+                  : tName.replace(/^نادي\s+/, '').slice(0, 12),
+              teamColor:
+                existingIdx >= 0 ? compStandings[existingIdx].teamColor : '#10B981',
+              played: Number(r.played) || 0,
+              won: Number(r.won) || 0,
+              drawn: Number(r.drawn) || 0,
+              lost: Number(r.lost) || 0,
+              goalsFor: Number(r.goalsFor) || 0,
+              goalsAgainst: Number(r.goalsAgainst) || 0,
+              points: Number(r.points) || 0,
+              form:
+                existingIdx >= 0 && compStandings[existingIdx].form.length > 0
+                  ? compStandings[existingIdx].form
+                  : ['W', 'D', 'W'],
+            };
+            if (existingIdx >= 0) {
+              compStandings[existingIdx] = rowObj;
+            } else {
+              compStandings.push(rowObj);
+            }
+          }
+
+          const sortedComp = sortStandingsByCompetitionRules(
+            compStandings,
+            nextMatches.filter(
+              (m) => m.competitionId === targetBatch.competitionId && m.status === 'finished'
+            ),
+            rule
+          );
+          nextStandings = [...otherStandings, ...sortedComp];
+        } else if (
+          targetBatch.dataType === 'match_results' ||
+          targetBatch.dataType === 'match_schedule' ||
+          targetBatch.dataType === 'rounds_data'
+        ) {
+          for (const r of revalidatedRows) {
+            const hTeam = String(r.homeTeam || '').trim();
+            const aTeam = String(r.awayTeam || '').trim();
+            if (!hTeam || !aTeam) continue;
+            ensureTeamInDirectory(hTeam);
+            ensureTeamInDirectory(aTeam);
+
+            const newMatch: MatchItem = {
+              id: `m-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              competitionId: targetBatch.competitionId,
+              season: targetBatch.season,
+              ageCategory: targetBatch.ageCategory,
+              groupName: targetBatch.groupName,
+              round: String(r.round || targetBatch.roundName || 'الجولة 1'),
+              homeTeam: hTeam,
+              homeShort: hTeam.replace(/^نادي\s+/, '').slice(0, 10),
+              homeColor: '#10B981',
+              awayTeam: aTeam,
+              awayShort: aTeam.replace(/^نادي\s+/, '').slice(0, 10),
+              awayColor: '#38BDF8',
+              homeScore: Number(r.homeScore) || 0,
+              awayScore: Number(r.awayScore) || 0,
+              status:
+                r.status ||
+                (targetBatch.dataType === 'match_schedule' ? 'upcoming' : 'finished'),
+              kickoffIso: r.matchDate
+                ? new Date(r.matchDate).toISOString()
+                : new Date().toISOString(),
+              stadium: String(r.stadium || 'ستاد عمّان الدولي'),
+              isApproved: true,
+              importBatchId: targetBatch.id,
+              events: [],
+            };
+
+            nextMatches = [newMatch, ...nextMatches];
+            if (newMatch.status === 'finished') {
+              nextStandings = applyApprovedMatchResultToStandings(
+                newMatch,
+                null,
+                nextStandings,
+                nextMatches,
+                rule,
+                nextDirectory
+              );
+            }
+          }
+        } else if (
+          targetBatch.dataType === 'top_scorers' ||
+          targetBatch.dataType === 'players_stats' ||
+          targetBatch.dataType === 'players_list'
+        ) {
+          for (const r of revalidatedRows) {
+            const pName = String(r.playerName || '').trim();
+            const tName = String(r.teamName || '').trim();
+            if (!pName) continue;
+            ensureTeamInDirectory(tName);
+            const normP = normalizeArabicTeamName(pName);
+            const existingIdx = nextScorers.findIndex(
+              (s) =>
+                s.competitionId === targetBatch.competitionId &&
+                normalizeArabicTeamName(s.playerName) === normP
+            );
+            const scorerObj: TopScorer = {
+              id:
+                existingIdx >= 0
+                  ? nextScorers[existingIdx].id
+                  : `sc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              competitionId: targetBatch.competitionId,
+              season: targetBatch.season,
+              playerName: pName,
+              teamName: tName || 'غير محدد',
+              teamColor: '#10B981',
+              goals: Number(r.goals) || 0,
+              assists: Number(r.assists) || 0,
+              matches: Number(r.matches) || 1,
+            };
+            if (existingIdx >= 0) {
+              nextScorers[existingIdx] = scorerObj;
+            } else {
+              nextScorers.push(scorerObj);
+            }
+          }
+        } else if (targetBatch.dataType === 'goalkeepers_stats') {
+          for (const r of revalidatedRows) {
+            const pName = String(r.playerName || '').trim();
+            const tName = String(r.teamName || '').trim();
+            if (!pName) continue;
+            ensureTeamInDirectory(tName);
+            const normP = normalizeArabicTeamName(pName);
+            const existingIdx = nextGoalkeepers.findIndex(
+              (g) =>
+                g.competitionId === targetBatch.competitionId &&
+                normalizeArabicTeamName(g.playerName) === normP
+            );
+            const gkObj: GoalkeeperStat = {
+              id:
+                existingIdx >= 0
+                  ? nextGoalkeepers[existingIdx].id
+                  : `gk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              competitionId: targetBatch.competitionId,
+              season: targetBatch.season,
+              playerName: pName,
+              teamName: tName || 'غير محدد',
+              teamColor: '#10B981',
+              matches: Number(r.matches) || 1,
+              cleanSheets: Number(r.cleanSheets) || 0,
+              goalsConceded: Number(r.goalsConceded) || 0,
+            };
+            if (existingIdx >= 0) {
+              nextGoalkeepers[existingIdx] = gkObj;
+            } else {
+              nextGoalkeepers.push(gkObj);
+            }
+          }
+        } else if (targetBatch.dataType === 'teams_list') {
+          for (const r of revalidatedRows) {
+            const tName = String(r.teamName || '').trim();
+            if (!tName) continue;
+            ensureTeamInDirectory(tName);
+          }
+        }
+
+        const revisionEntry: ImportRevisionEntry = {
+          id: `rev-${Date.now()}`,
+          timestamp: nowIso,
+          actor: actorName,
+          action: 'APPROVED_AND_PUBLISHED',
+          details: `تم اعتماد ونشر ${revalidatedRows.length} سجلات ضمن بطولة (${targetBatch.competitionId})`,
+        };
+
+        const importBatches = (prev.importBatches || []).map((b) =>
+          b.id === batchId
+            ? {
+                ...b,
+                rows: revalidatedRows,
+                status: 'Published' as const,
+                approvedBy: actorName,
+                approvedAt: nowIso,
+                updatedAt: nowIso,
+                revisions: [revisionEntry, ...(b.revisions || [])],
+              }
+            : b
+        );
+
+        return {
+          ...prev,
+          matches: nextMatches,
+          standings: nextStandings,
+          scorers: nextScorers,
+          goalkeepers: nextGoalkeepers,
+          teamsDirectory: nextDirectory,
+          importBatches,
+          auditLogs: [revisionEntry, ...(prev.auditLogs || [])].slice(0, 100),
+        };
+      });
+
+      showToast('تم اعتماد البيانات ونشرها وتحديث الترتيب والإحصائيات تلقائياً!', 'emerald');
+      return true;
+    },
+    [commitState, data, isAdminUnlocked, showToast]
+  );
+
+  const rejectImportBatch = useCallback(
+    async (batchId: string, reason: string, actorName = 'مدير النظام') => {
+      if (!isAdminUnlocked) return;
+      const nowIso = new Date().toISOString();
+      const rev: ImportRevisionEntry = {
+        id: `rev-${Date.now()}`,
+        timestamp: nowIso,
+        actor: actorName,
+        action: 'REJECTED_IMPORT',
+        details: `تم رفض الاستيراد: ${reason || 'بيانات غير مطابقة'}`,
+      };
+      await commitState((prev) => ({
+        ...prev,
+        importBatches: (prev.importBatches || []).map((b) =>
+          b.id === batchId
+            ? {
+                ...b,
+                status: 'Rejected' as const,
+                rejectedReason: reason,
+                updatedAt: nowIso,
+                revisions: [rev, ...(b.revisions || [])],
+              }
+            : b
+        ),
+        auditLogs: [rev, ...(prev.auditLogs || [])].slice(0, 100),
+      }));
+      showToast('تم رفض عملية الاستيراد وحفظها في السجل', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const deleteImportBatch = useCallback(
+    async (batchId: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        importBatches: (prev.importBatches || []).filter((b) => b.id !== batchId),
+      }));
+      showToast('تم حذف مسودة الاستيراد', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
   );
 
   // البنرات والبطاقات والصور
@@ -730,6 +1395,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteStandingRow,
         saveScorer,
         deleteScorer,
+        saveGoalkeeper,
+        deleteGoalkeeper,
+        saveCompetitionRule,
+        recalculateCompetitionStandings,
+        registerNewTeam,
+        linkAliasToExistingTeam,
+        saveImportBatch,
+        approveAndPublishImportBatch,
+        rejectImportBatch,
+        deleteImportBatch,
         saveBanner,
         deleteBanner,
         saveSportsCard,

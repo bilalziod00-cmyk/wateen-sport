@@ -1,4 +1,4 @@
-// النماذج البرمجية الأساسية لتطبيق وتين سبورت (Wateen Sport)
+// النماذج البرمجية الأساسية لتطبيق وتين سبورت (Wateen Sport) + نظام الإدخال الذكي وإدارة البطولات
 
 export type CompetitionId =
   | 'pro_league'
@@ -9,6 +9,7 @@ export type CompetitionId =
   | 'youth_u17'
   | 'youth_u15'
   | 'youth_grassroots'
+  | 'womens_league'
   | 'jordan_cup'
   | 'national_teams'
   | 'general';
@@ -19,6 +20,7 @@ export type MainCompetitionGroup =
   | 'second_div'
   | 'third_div'
   | 'youth'
+  | 'womens_league'
   | 'jordan_cup'
   | 'national_teams';
 
@@ -56,7 +58,8 @@ export interface NewsArticle {
   relatedMatchId?: string;
 }
 
-export type MatchStatus = 'live' | 'upcoming' | 'finished';
+// دعم حالات المباريات الشاملة: مباشر، قادمة، منتهية، مؤجلة، ملغاة
+export type MatchStatus = 'live' | 'upcoming' | 'finished' | 'postponed' | 'cancelled';
 
 export interface MatchEvent {
   id: string;
@@ -82,6 +85,9 @@ export interface MatchStats {
 export interface MatchItem {
   id: string;
   competitionId: CompetitionId;
+  season?: string;
+  ageCategory?: string;
+  groupName?: string;
   round: string;
   homeTeam: string;
   homeShort: string;
@@ -98,7 +104,10 @@ export interface MatchItem {
   referee?: string;
   broadcast?: string;
   liveStreamUrl?: string;
+  postponedReason?: string;
   featured?: boolean;
+  isApproved?: boolean;
+  importBatchId?: string;
   events: MatchEvent[];
   stats?: MatchStats;
 }
@@ -121,6 +130,8 @@ export type StandingZone = 'champion' | 'continental' | 'promotion' | 'relegatio
 export interface StandingRow {
   id: string;
   competitionId: CompetitionId;
+  season?: string;
+  groupName?: string;
   teamName: string;
   shortName: string;
   teamColor: string;
@@ -131,6 +142,8 @@ export interface StandingRow {
   goalsFor: number;
   goalsAgainst: number;
   points: number;
+  pointsDeducted?: number;
+  position?: number;
   form: ('W' | 'D' | 'L')[];
   zone?: StandingZone;
 }
@@ -138,12 +151,173 @@ export interface StandingRow {
 export interface TopScorer {
   id: string;
   competitionId: CompetitionId;
+  season?: string;
   playerName: string;
   teamName: string;
   teamColor: string;
   goals: number;
   assists: number;
   matches: number;
+  position?: string;
+}
+
+// إحصائيات حراس المرمى (الشباك النظيفة والأهداف المستقبلة)
+export interface GoalkeeperStat {
+  id: string;
+  competitionId: CompetitionId;
+  season?: string;
+  playerName: string;
+  teamName: string;
+  teamColor: string;
+  matches: number;
+  cleanSheets: number;
+  goalsConceded: number;
+  saves?: number;
+}
+
+// معايير كسر التعادل القابلة للتخصيص لكل بطولة
+export type TieBreakerCriterion =
+  | 'head_to_head_points'
+  | 'head_to_head_gd'
+  | 'goal_difference'
+  | 'goals_for'
+  | 'wins';
+
+// قواعد البطولة القابلة للإعداد من لوحة الإدارة
+export interface CompetitionRuleConfig {
+  competitionId: CompetitionId;
+  season: string;
+  ageCategory: string;
+  groups: string[];
+  pointsWin: number;
+  pointsDraw: number;
+  pointsLoss: number;
+  championSpots: number;
+  continentalSpots: number;
+  promotionSpots: number;
+  relegationSpots: number;
+  tiebreakers: TieBreakerCriterion[];
+  updatedAt: string;
+}
+
+// سجل الفرق المعتمدة والمرادفات الذكية
+export interface TeamDirectoryItem {
+  id: string;
+  name: string;
+  shortName: string;
+  color: string;
+  competitionId: CompetitionId;
+  groupName?: string;
+  city?: string;
+  stadium?: string;
+  aliases: string[];
+}
+
+// ============================================================================
+// نماذج مركز الإدخال الذكي (AI Sports Data Import) والمراجعة والاعتماد
+// ============================================================================
+
+export type SmartImportDataType =
+  | 'standings_table'
+  | 'match_schedule'
+  | 'match_results'
+  | 'teams_list'
+  | 'players_list'
+  | 'top_scorers'
+  | 'goalkeepers_stats'
+  | 'players_stats'
+  | 'rounds_data';
+
+export type ImportSourceFormat = 'image' | 'pdf' | 'excel_csv' | 'pasted_text';
+
+export type ImportBatchStatus =
+  | 'Pending Review'
+  | 'Needs Correction'
+  | 'Approved'
+  | 'Rejected'
+  | 'Published';
+
+export interface ImportedRowIssue {
+  field: string;
+  type: 'unclear' | 'missing' | 'unknown_team' | 'duplicate' | 'conflict';
+  message: string;
+  suggestedTeamName?: string;
+}
+
+export interface SmartImportExtractedRow {
+  rowId: string;
+  sourceFileName: string;
+  // حقول موحدة قابلة للتخصيص حسب نوع الاستيراد
+  teamName?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  homeScore?: number | string;
+  awayScore?: number | string;
+  round?: string;
+  matchDate?: string;
+  kickoffTime?: string;
+  stadium?: string;
+  status?: MatchStatus;
+  played?: number | string;
+  won?: number | string;
+  drawn?: number | string;
+  lost?: number | string;
+  goalsFor?: number | string;
+  goalsAgainst?: number | string;
+  points?: number | string;
+  playerName?: string;
+  playerPosition?: string;
+  goals?: number | string;
+  assists?: number | string;
+  matches?: number | string;
+  cleanSheets?: number | string;
+  goalsConceded?: number | string;
+  city?: string;
+  // حالة التحقق البرمجي للصف
+  isUnclear: boolean;
+  isDuplicate: boolean;
+  hasConflict: boolean;
+  unknownTeams: string[];
+  issues: ImportedRowIssue[];
+}
+
+export interface ImportSourceFileMeta {
+  id: string;
+  name: string;
+  mimeType: string;
+  format: ImportSourceFormat;
+  previewDataUrl?: string;
+  rawTextPreview?: string;
+  sizeBytes: number;
+}
+
+export interface ImportRevisionEntry {
+  id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  details: string;
+}
+
+export interface SmartImportBatch {
+  id: string;
+  dataType: SmartImportDataType;
+  competitionId: CompetitionId;
+  season: string;
+  ageCategory: string;
+  groupName: string;
+  roundName?: string;
+  status: ImportBatchStatus;
+  sources: ImportSourceFileMeta[];
+  rawPastedText?: string;
+  rows: SmartImportExtractedRow[];
+  usedEngine: 'gemini_multimodal' | 'smart_deterministic';
+  createdAt: string;
+  updatedAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedReason?: string;
+  revisions: ImportRevisionEntry[];
 }
 
 export interface HeroBanner {
@@ -159,9 +333,22 @@ export interface HeroBanner {
   order: number;
 }
 
+export type AutoTemplateCardType =
+  | 'matchday'
+  | 'player_spotlight'
+  | 'transfer_alert'
+  | 'tactical_stat'
+  | 'match_card'
+  | 'result_card'
+  | 'standings_card'
+  | 'round_fixtures_card'
+  | 'top_scorers_card'
+  | 'goalkeepers_card'
+  | 'mvp_player_card';
+
 export interface SportsGraphicCard {
   id: string;
-  type: 'matchday' | 'player_spotlight' | 'transfer_alert' | 'tactical_stat';
+  type: AutoTemplateCardType;
   kicker: string;
   title: string;
   subtitle: string;
@@ -169,6 +356,8 @@ export interface SportsGraphicCard {
   imageUrl: string;
   accent: 'emerald' | 'crimson' | 'gold' | 'sky';
   metrics: StatPair[];
+  tableRows?: string[][];
+  isApprovedSource?: boolean;
   createdAt: string;
 }
 
@@ -196,6 +385,11 @@ export interface AppDataState {
   matches: MatchItem[];
   standings: StandingRow[];
   scorers: TopScorer[];
+  goalkeepers?: GoalkeeperStat[];
+  teamsDirectory?: TeamDirectoryItem[];
+  competitionRules?: Record<string, CompetitionRuleConfig>;
+  importBatches?: SmartImportBatch[];
+  auditLogs?: ImportRevisionEntry[];
   banners: HeroBanner[];
   cards: SportsGraphicCard[];
   liveStreams: LiveStreamItem[];

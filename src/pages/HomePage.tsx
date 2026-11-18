@@ -66,7 +66,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   );
 
   const featuredMatches = useMemo(() => {
-    const order = { live: 0, upcoming: 1, finished: 2 };
+    const order = { live: 0, upcoming: 1, finished: 2, postponed: 3, cancelled: 4 };
     return [...data.matches]
       .sort((a, b) => {
         if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];

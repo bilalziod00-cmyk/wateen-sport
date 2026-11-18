@@ -1,4 +1,8 @@
 import { AppDataState } from '../types/sports';
+import {
+  getDefaultCompetitionRules,
+  INITIAL_JORDAN_TEAMS_DIRECTORY,
+} from '../constants/competitions';
 
 // تواريخ ديناميكية نسبية لليوم حتى تبدو المباريات والأخبار حية دائماً عند التشغيل الأول
 const now = Date.now();
@@ -629,12 +633,32 @@ export const INITIAL_SEED_DATA: AppDataState = {
     { id: 'st-gr-2', competitionId: 'youth_grassroots', teamName: 'براعم عمّان', shortName: 'عمّان', teamColor: '#10B981', played: 6, won: 4, drawn: 1, lost: 1, goalsFor: 15, goalsAgainst: 7, points: 13, form: ['W', 'L', 'W', 'W', 'D'], zone: 'none' },
     { id: 'st-gr-3', competitionId: 'youth_grassroots', teamName: 'مواهب إربد', shortName: 'إربد', teamColor: '#F59E0B', played: 6, won: 4, drawn: 0, lost: 2, goalsFor: 14, goalsAgainst: 9, points: 12, form: ['W', 'W', 'L', 'W', 'L'], zone: 'none' },
 
+    // دوري المحترفات وبطولات السيدات
+    { id: 'st-w-1', competitionId: 'womens_league', teamName: 'الاتحاد للسيدات', shortName: 'الاتحاد', teamColor: '#EC4899', played: 8, won: 7, drawn: 1, lost: 0, goalsFor: 24, goalsAgainst: 4, points: 22, form: ['W', 'W', 'W', 'D', 'W'], zone: 'champion' },
+    { id: 'st-w-2', competitionId: 'womens_league', teamName: 'عمان FC للسيدات', shortName: 'عمان FC', teamColor: '#10B981', played: 8, won: 6, drawn: 1, lost: 1, goalsFor: 20, goalsAgainst: 6, points: 19, form: ['W', 'W', 'L', 'W', 'W'], zone: 'none' },
+    { id: 'st-w-3', competitionId: 'womens_league', teamName: 'الأرثوذكسي للسيدات', shortName: 'الأرثوذكسي', teamColor: '#EF4444', played: 8, won: 4, drawn: 2, lost: 2, goalsFor: 15, goalsAgainst: 9, points: 14, form: ['D', 'W', 'W', 'L', 'D'], zone: 'none' },
+    { id: 'st-w-4', competitionId: 'womens_league', teamName: 'النصر للسيدات', shortName: 'النصر', teamColor: '#3B82F6', played: 8, won: 3, drawn: 1, lost: 4, goalsFor: 11, goalsAgainst: 14, points: 10, form: ['L', 'W', 'L', 'W', 'L'], zone: 'none' },
+
     // المنتخبات الوطنية (مجموعة التصفيات كمثال)
     { id: 'st-nat-1', competitionId: 'national_teams', teamName: 'الأردن (النشامى)', shortName: 'الأردن', teamColor: '#E11D48', played: 6, won: 4, drawn: 2, lost: 0, goalsFor: 13, goalsAgainst: 4, points: 14, form: ['W', 'D', 'W', 'W', 'D'], zone: 'champion' },
     { id: 'st-nat-2', competitionId: 'national_teams', teamName: 'كوريا الجنوبية', shortName: 'كوريا', teamColor: '#EF4444', played: 6, won: 4, drawn: 1, lost: 1, goalsFor: 12, goalsAgainst: 5, points: 13, form: ['W', 'W', 'D', 'L', 'W'], zone: 'continental' },
     { id: 'st-nat-3', competitionId: 'national_teams', teamName: 'العراق', shortName: 'العراق', teamColor: '#10B981', played: 6, won: 3, drawn: 2, lost: 1, goalsFor: 9, goalsAgainst: 6, points: 11, form: ['D', 'W', 'W', 'D', 'L'], zone: 'none' },
     { id: 'st-nat-4', competitionId: 'national_teams', teamName: 'عُمان', shortName: 'عُمان', teamColor: '#F97316', played: 6, won: 2, drawn: 1, lost: 3, goalsFor: 7, goalsAgainst: 9, points: 7, form: ['L', 'W', 'L', 'D', 'W'], zone: 'none' },
   ],
+
+  goalkeepers: [
+    { id: 'gk-1', competitionId: 'pro_league', playerName: 'يزيد أبو ليلى', teamName: 'الحسين إربد', teamColor: '#EAB308', matches: 14, cleanSheets: 9, goalsConceded: 6, saves: 38 },
+    { id: 'gk-2', competitionId: 'pro_league', playerName: 'عبدالله الفاخوري', teamName: 'الوحدات', teamColor: '#10B981', matches: 14, cleanSheets: 7, goalsConceded: 10, saves: 34 },
+    { id: 'gk-3', competitionId: 'pro_league', playerName: 'نور بني عطية', teamName: 'الفيصلي', teamColor: '#38BDF8', matches: 14, cleanSheets: 6, goalsConceded: 11, saves: 31 },
+    { id: 'gk-4', competitionId: 'pro_league', playerName: 'مالك شلبية', teamName: 'الرمثا', teamColor: '#2563EB', matches: 13, cleanSheets: 5, goalsConceded: 13, saves: 29 },
+    { id: 'gk-5', competitionId: 'first_div', playerName: 'محمد الشطناوي', teamName: 'العربي', teamColor: '#16A34A', matches: 9, cleanSheets: 5, goalsConceded: 6, saves: 24 },
+    { id: 'gk-6', competitionId: 'womens_league', playerName: 'شيرين الشلبي', teamName: 'الاتحاد للسيدات', teamColor: '#EC4899', matches: 8, cleanSheets: 6, goalsConceded: 4, saves: 22 },
+  ],
+
+  teamsDirectory: INITIAL_JORDAN_TEAMS_DIRECTORY,
+  competitionRules: getDefaultCompetitionRules(),
+  importBatches: [],
+  auditLogs: [],
 
   scorers: [
     { id: 'sc-1', competitionId: 'pro_league', playerName: 'محمود مرضي', teamName: 'الحسين إربد', teamColor: '#EAB308', goals: 11, assists: 5, matches: 14 },

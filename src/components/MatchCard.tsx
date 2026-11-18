@@ -15,6 +15,8 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, compact = false, on
   const comp = COMPETITIONS[match.competitionId];
   const isLive = match.status === 'live';
   const isFinished = match.status === 'finished';
+  const isPostponed = match.status === 'postponed';
+  const isCancelled = match.status === 'cancelled';
 
   return (
     <button
@@ -45,6 +47,14 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, compact = false, on
         ) : isFinished ? (
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-white/10 shrink-0">
             انتهت
+          </span>
+        ) : isPostponed ? (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+            مؤجلة
+          </span>
+        ) : isCancelled ? (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
+            ملغاة
           </span>
         ) : (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0 tabular-nums">

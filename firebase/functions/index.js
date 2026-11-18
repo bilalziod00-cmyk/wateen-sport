@@ -1,12 +1,39 @@
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
 
 /**
- * دالة سحابية تلقائية:
- * فور ضغط المالك على "بث الإشعار الفوري الآن" من لوحة التحكم داخل وتين سبورت،
- * تقوم هذه الدالة بإرسال إشعار Push Notification عبر FCM لجميع هواتف أندرويد المسجلة.
+ * 1) تعيين صلاحية المدير (Custom Claims: { admin: true, role: 'admin' }) من جهة الخادم
+ */
+exports.assignWateenAdminClaim = onCall(async (request) => {
+  if (!request.auth || request.auth.token.admin !== true) {
+    throw new HttpsError('permission-denied', 'غير مصرح: هذه العملية مخصصة للمدير العام فقط.');
+  }
+
+  const targetUid = request.data?.uid;
+  if (!targetUid) {
+    throw new HttpsError('invalid-argument', 'يرجى تحديد معرف المستخدم uid.');
+  }
+
+  await admin.auth().setCustomUserClaims(targetUid, {
+    admin: true,
+    role: 'admin',
+  });
+
+  await admin.firestore().collection('audit_logs').add({
+    actorUid: request.auth.uid,
+    targetUid,
+    action: 'ASSIGN_ADMIN_CLAIM',
+    timestamp: new Date().toISOString(),
+  });
+
+  return { ok: true, uid: targetUid };
+});
+
+/**
+ * 2) دالة سحابية تلقائية لبث إشعارات Push Notification عبر FCM لجميع هواتف أندرويد المسجلة
  */
 exports.broadcastWateenPush = onDocumentCreated('push_requests/{reqId}', async (event) => {
   const snap = event.data;
@@ -25,7 +52,6 @@ exports.broadcastWateenPush = onDocumentCreated('push_requests/{reqId}', async (
     return;
   }
 
-  // إرسال على دفعات (حتى 500 جهاز في الدفعة الواحدة حسب حدود FCM)
   const chunkSize = 500;
   let successCount = 0;
   let failureCount = 0;
@@ -34,16 +60,13 @@ exports.broadcastWateenPush = onDocumentCreated('push_requests/{reqId}', async (
     const chunk = tokens.slice(i, i + chunkSize);
     const response = await admin.messaging().sendEachForMulticast({
       tokens: chunk,
-      notification: {
-        title,
-        body,
-      },
+      notification: { title, body },
       android: {
         priority: 'high',
         notification: {
           channelId: 'wateen_breaking_news',
           sound: 'default',
-          color: '#10B981',
+          color: '#00E640',
         },
       },
       data: {
@@ -55,7 +78,6 @@ exports.broadcastWateenPush = onDocumentCreated('push_requests/{reqId}', async (
     successCount += response.successCount;
     failureCount += response.failureCount;
 
-    // تنظيف الرموز المنتهية تلقائياً
     const invalidTokens = [];
     response.responses.forEach((res, idx) => {
       if (!res.success && res.error?.code === 'messaging/registration-token-not-registered') {

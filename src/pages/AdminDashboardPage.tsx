@@ -6,8 +6,10 @@ import {
   Flame,
   Lock,
   Newspaper,
+  Palette,
   Radio,
   ShieldCheck,
+  Sparkles,
   Table2,
 } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
@@ -18,12 +20,22 @@ import { AdminStandingsManager } from './admin/AdminStandingsManager';
 import { AdminMediaAndPushManager } from './admin/AdminMediaAndPushManager';
 import { AdminLiveStreamManager } from './admin/AdminLiveStreamManager';
 import { AdminCloudSettings } from './admin/AdminCloudSettings';
+import { AdminSmartImportCenter } from './admin/AdminSmartImportCenter';
+import { AdminAutoDesignStudio } from './admin/AdminAutoDesignStudio';
 
-type AdminTab = 'news' | 'live' | 'matches' | 'standings' | 'media_push' | 'cloud';
+type AdminTab =
+  | 'smart_import'
+  | 'news'
+  | 'live'
+  | 'matches'
+  | 'standings'
+  | 'auto_design'
+  | 'media_push'
+  | 'cloud';
 
 export const AdminDashboardPage: React.FC = () => {
   const { data, isAdminUnlocked, lockAdmin, cloudMode } = useAppData();
-  const [tab, setTab] = useState<AdminTab>('news');
+  const [tab, setTab] = useState<AdminTab>('smart_import');
 
   if (!isAdminUnlocked) {
     return <AdminLockScreen />;
@@ -32,12 +44,26 @@ export const AdminDashboardPage: React.FC = () => {
   const breakingCount = data.articles.filter((a) => a.isBreaking).length;
   const liveCount = data.matches.filter((m) => m.status === 'live').length;
   const activeStreamsCount = (data.liveStreams || []).filter((s) => s.isLive).length;
+  const pendingImportsCount = (data.importBatches || []).filter(
+    (b) => b.status === 'Pending Review' || b.status === 'Needs Correction'
+  ).length;
 
   const tabs: { id: AdminTab; label: string; icon: React.ElementType; highlight?: boolean }[] = [
+    {
+      id: 'smart_import',
+      label: `الإدخال الذكي AI${pendingImportsCount ? ` (${pendingImportsCount})` : ''}`,
+      icon: Sparkles,
+    },
     { id: 'news', label: 'الأخبار والذكاء AI', icon: Newspaper },
-    { id: 'live', label: `البث المباشر${activeStreamsCount ? ` (${activeStreamsCount})` : ''}`, icon: Radio, highlight: true },
-    { id: 'matches', label: 'المباريات', icon: Calendar },
-    { id: 'standings', label: 'الترتيب', icon: Table2 },
+    {
+      id: 'live',
+      label: `البث المباشر${activeStreamsCount ? ` (${activeStreamsCount})` : ''}`,
+      icon: Radio,
+      highlight: true,
+    },
+    { id: 'matches', label: 'المباريات والنتائج', icon: Calendar },
+    { id: 'standings', label: 'الترتيب والهدافون', icon: Table2 },
+    { id: 'auto_design', label: 'التصميم التلقائي', icon: Palette },
     { id: 'media_push', label: 'البنرات والإشعارات', icon: BellRing },
     { id: 'cloud', label: 'السحابة والأمان', icon: Cloud },
   ];
@@ -53,10 +79,10 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
             <div>
               <h1 className="text-base sm:text-lg font-black text-white">
-                لوحة التحكم الإدارية — وتين سبورت
+                لوحة التحكم الإدارية — وتين سبورت | WATEEN SPORT
               </h1>
               <p className="text-[11px] text-slate-300">
-                تحكم كامل وفوري بجميع أقسام التطبيق ({cloudMode === 'firebase' ? 'متصل بالسحابة' : 'وضع محلي'})
+                الإدخال الذكي بالذكاء الاصطناعي وإدارة البطولات ({cloudMode === 'firebase' ? 'متصل بالسحابة' : 'وضع محلي'})
               </p>
             </div>
           </div>
@@ -89,14 +115,16 @@ export const AdminDashboardPage: React.FC = () => {
             <div className="text-[10px] text-slate-400">مباشر الآن</div>
           </div>
           <div className="rounded-2xl bg-black/35 border border-white/10 py-2.5 px-1">
-            <div className="text-lg font-black text-amber-300">{data.notifications.length}</div>
-            <div className="text-[10px] text-slate-400">الإشعارات</div>
+            <div className="text-lg font-black text-amber-300">
+              {(data.importBatches || []).length}
+            </div>
+            <div className="text-[10px] text-slate-400">عمليات الاستيراد</div>
           </div>
         </div>
       </div>
 
       {/* شريط أقسام لوحة التحكم - متجاوب بحيث تظهر كل التبويبات بدون قص */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.id;
@@ -124,10 +152,12 @@ export const AdminDashboardPage: React.FC = () => {
 
       {/* القسم النشط */}
       <div>
+        {tab === 'smart_import' && <AdminSmartImportCenter />}
         {tab === 'news' && <AdminNewsManager />}
         {tab === 'live' && <AdminLiveStreamManager />}
         {tab === 'matches' && <AdminMatchesManager />}
         {tab === 'standings' && <AdminStandingsManager />}
+        {tab === 'auto_design' && <AdminAutoDesignStudio />}
         {tab === 'media_push' && <AdminMediaAndPushManager />}
         {tab === 'cloud' && <AdminCloudSettings />}
       </div>

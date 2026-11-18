@@ -285,6 +285,8 @@ export const AdminMatchesManager: React.FC = () => {
                   <option value="upcoming">قادمة</option>
                   <option value="live">مباشر الآن</option>
                   <option value="finished">انتهت</option>
+                  <option value="postponed">مؤجلة</option>
+                  <option value="cancelled">ملغاة</option>
                 </select>
                 {form.status === 'live' && (
                   <input
@@ -503,8 +505,8 @@ export const AdminMatchesManager: React.FC = () => {
 
             {/* شريط تغيير الحالة المباشرة والتعديل والحذف */}
             <div className="pt-2.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                {(['upcoming', 'live', 'finished'] as MatchStatus[]).map((st) => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(['upcoming', 'live', 'finished', 'postponed', 'cancelled'] as MatchStatus[]).map((st) => (
                   <button
                     key={st}
                     type="button"
@@ -513,6 +515,10 @@ export const AdminMatchesManager: React.FC = () => {
                       m.status === st
                         ? st === 'live'
                           ? 'bg-rose-500/25 border-rose-500/50 text-rose-200'
+                          : st === 'postponed'
+                          ? 'bg-amber-500/25 border-amber-500/50 text-amber-200'
+                          : st === 'cancelled'
+                          ? 'bg-rose-900/40 border-rose-500/40 text-rose-300'
                           : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                         : 'bg-white/5 border-white/8 text-slate-400'
                     }`}
@@ -523,8 +529,12 @@ export const AdminMatchesManager: React.FC = () => {
                       </span>
                     ) : st === 'upcoming' ? (
                       'قادمة'
-                    ) : (
+                    ) : st === 'finished' ? (
                       'انتهت'
+                    ) : st === 'postponed' ? (
+                      'مؤجلة'
+                    ) : (
+                      'ملغاة'
                     )}
                   </button>
                 ))}
