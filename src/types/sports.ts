@@ -377,6 +377,7 @@ export interface SmartImportExtractedRow {
   status?: MatchStatus;
   sourceReference?: string;
   extractionConfidence?: number; // 0..100
+  fieldConfidences?: Record<string, number>; // نسبة الثقة 0..100 لكل حقل على حدة
   validationWarnings?: string[];
 
   // حقول الترتيب واللاعبين والحراس
@@ -432,6 +433,9 @@ export interface ImportSourceFileMeta {
   previewDataUrl?: string;
   rawTextPreview?: string;
   sizeBytes: number;
+  enhancedForOcr?: boolean;
+  ocrQualityGrade?: 'high' | 'medium' | 'low';
+  ocrQualityNotes?: string[];
 }
 
 export interface ImportRevisionEntry {

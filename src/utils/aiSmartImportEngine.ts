@@ -33,6 +33,32 @@ export function normalizeDigits(str: string): string {
     .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
 }
 
+/**
+ * ضمان ترميز UTF-8 سليم للنصوص العربية والإنجليزية المستوردة من CSV/Excel/PDF:
+ * - إزالة علامة BOM (\uFEFF) ومحارف التحكم غير المرئية
+ * - التطبيع المعياري Unicode NFC
+ * - استرداد تلقائي لملفات CSV العربية المحفوظة بترميز Windows-1256 عند ظهور رموز تالفة (\uFFFD)
+ */
+export function decodeSportsTextBufferUtf8(bytes: Uint8Array): string {
+  let decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  if (decoded.includes('\uFFFD')) {
+    try {
+      const win1256 = new TextDecoder('windows-1256', { fatal: false }).decode(bytes);
+      const arabicCountWin = (win1256.match(/[\u0600-\u06FF]/g) || []).length;
+      const arabicCountUtf8 = (decoded.match(/[\u0600-\u06FF]/g) || []).length;
+      if (arabicCountWin > arabicCountUtf8) {
+        decoded = win1256;
+      }
+    } catch {
+      // بيئة لا تدعم windows-1256، نكتفي بنتيجة UTF-8
+    }
+  }
+  return decoded
+    .replace(/^\uFEFF/, '')
+    .replace(/[\u0000\u200B\u200C\u200D\uFEFF]/g, '')
+    .normalize('NFC');
+}
+
 export function isValueUnclearOrMissing(val: unknown): boolean {
   if (val === null || val === undefined) return true;
   const s = normalizeDigits(String(val)).trim();
@@ -113,6 +139,9 @@ export function validateExtractedImportRows(
     const issues: ImportedRowIssue[] = [];
     const validationWarnings: string[] = [];
     const unknownTeams: string[] = [];
+    const fieldConfidences: Record<string, number> = {
+      ...(raw.fieldConfidences || {}),
+    };
     let isUnclear = false;
     let isDuplicate = false;
     let hasConflict = false;
@@ -147,6 +176,7 @@ export function validateExtractedImportRows(
       status: statusVal,
       sourceReference: raw.sourceReference || `${raw.sourceFileName || 'مصدر مباشر'} #${idx + 1}`,
       extractionConfidence: confidence,
+      fieldConfidences,
       validationWarnings: [],
       teamName: raw.teamName !== undefined ? String(raw.teamName || '').trim() : undefined,
       played: raw.played,
@@ -178,6 +208,7 @@ export function validateExtractedImportRows(
         row[fieldKey] = '';
         isUnclear = true;
         confidence = Math.min(confidence, 35);
+        fieldConfidences[fieldKey] = 0;
         const msg = `${labelAr} غير موجود أو غير واضح في المصدر`;
         validationWarnings.push(msg);
         issues.push({
@@ -192,9 +223,11 @@ export function validateExtractedImportRows(
       const resolved = resolveTeamFromDirectory(rawVal, competitionId, directory, existingStandings);
       if (resolved.status === 'matched') {
         row[fieldKey] = resolved.canonicalName;
+        fieldConfidences[fieldKey] = Math.min(fieldConfidences[fieldKey] ?? 98, 98);
       } else if (resolved.status === 'similar') {
         unknownTeams.push(rawVal);
         confidence = Math.min(confidence, 78);
+        fieldConfidences[fieldKey] = Math.min(fieldConfidences[fieldKey] ?? 76, 76);
         const msg = `اسم مشابه لفريق مسجل: "${rawVal}" — هل تقصد "${resolved.suggestedTeamName}"؟`;
         validationWarnings.push(msg);
         issues.push({
@@ -207,6 +240,7 @@ export function validateExtractedImportRows(
       } else {
         unknownTeams.push(rawVal);
         confidence = Math.min(confidence, 82);
+        fieldConfidences[fieldKey] = Math.min(fieldConfidences[fieldKey] ?? 82, 82);
         const msg = `الفريق "${rawVal}" غير موجود في قاعدة البيانات (يمكن ربطه أو اعتماده كفريق جديد)`;
         validationWarnings.push(msg);
         issues.push({
@@ -227,6 +261,12 @@ export function validateExtractedImportRows(
       inspectTeam('homeTeam', 'الفريق المستضيف');
       inspectTeam('awayTeam', 'الفريق الضيف');
 
+      fieldConfidences.roundNumber = row.roundNumber ? 95 : 70;
+      fieldConfidences.stadium = row.stadium ? 92 : 50;
+      if (row.matchDate) {
+        fieldConfidences.matchDate = 92;
+      }
+
       if (
         row.homeTeam &&
         row.awayTeam &&
@@ -234,6 +274,8 @@ export function validateExtractedImportRows(
       ) {
         hasConflict = true;
         confidence = Math.min(confidence, 20);
+        fieldConfidences.homeTeam = 20;
+        fieldConfidences.awayTeam = 20;
         const msg = 'تعارض: لا يمكن أن يكون الفريق المستضيف والضيف نفس الفريق';
         validationWarnings.push(msg);
         issues.push({
@@ -262,6 +304,9 @@ export function validateExtractedImportRows(
         row.homeScore = parsedHome;
         row.awayScore = parsedAway;
 
+        fieldConfidences.homeScore = parsedHome === null ? 0 : parsedHome > 30 ? 45 : 97;
+        fieldConfidences.awayScore = parsedAway === null ? 0 : parsedAway > 30 ? 45 : 97;
+
         if (parsedHome === null || parsedAway === null) {
           isUnclear = true;
           confidence = Math.min(confidence, 40);
@@ -273,10 +318,22 @@ export function validateExtractedImportRows(
             blocking: true,
             message: msg,
           });
+        } else if (parsedHome > 30 || parsedAway > 30) {
+          confidence = Math.min(confidence, 55);
+          const msg = `تنبيه: نتيجة غير اعتيادية (${parsedHome}-${parsedAway}) — يُرجى مراجعة الأهداف قبل الاعتماد`;
+          validationWarnings.push(msg);
+          issues.push({
+            field: parsedHome > 30 ? 'homeScore' : 'awayScore',
+            type: 'warning',
+            blocking: false,
+            message: msg,
+          });
         }
       } else {
         row.homeScore = parsedHome;
         row.awayScore = parsedAway;
+        fieldConfidences.homeScore = parsedHome === null ? 85 : 95;
+        fieldConfidences.awayScore = parsedAway === null ? 85 : 95;
       }
 
       // فحص التكرار
@@ -322,7 +379,7 @@ export function validateExtractedImportRows(
         }
       }
     }
-    // 2) التحقق من جدول الترتيب
+    // 2) التحقق الحسابي الصارم لجدول الترتيب
     else if (dataType === 'standings_table') {
       inspectTeam('teamName', 'اسم الفريق');
       row.played = parseScoreOrNull(row.played);
@@ -332,6 +389,19 @@ export function validateExtractedImportRows(
       row.goalsFor = parseScoreOrNull(row.goalsFor ?? 0);
       row.goalsAgainst = parseScoreOrNull(row.goalsAgainst ?? 0);
       row.points = parseScoreOrNull(row.points);
+
+      const numericFields: (keyof SmartImportExtractedRow)[] = [
+        'played',
+        'won',
+        'drawn',
+        'lost',
+        'goalsFor',
+        'goalsAgainst',
+        'points',
+      ];
+      for (const nf of numericFields) {
+        fieldConfidences[nf] = row[nf] === null ? 0 : 96;
+      }
 
       const essentialFields: (keyof SmartImportExtractedRow)[] = [
         'played',
@@ -344,6 +414,7 @@ export function validateExtractedImportRows(
         if (row[ef] === null) {
           isUnclear = true;
           confidence = Math.min(confidence, 45);
+          fieldConfidences[ef] = 0;
           const msg = `قيمة الحقل (${ef}) غير واضحة في جدول الترتيب`;
           validationWarnings.push(msg);
           issues.push({
@@ -361,15 +432,54 @@ export function validateExtractedImportRows(
         typeof row.drawn === 'number' &&
         typeof row.lost === 'number'
       ) {
-        if (row.played !== row.won + row.drawn + row.lost) {
-          const msg = `تنبيه حسابي: لعب (${row.played}) يختلف عن مجموع (فوز ${row.won} + تعادل ${row.drawn} + خسارة ${row.lost})`;
+        const sumPlayed = row.won + row.drawn + row.lost;
+        if (row.played !== sumPlayed) {
+          // خطأ حسابي حرج يمنع الاعتماد حتى التصحيح (لعب != فوز + تعادل + خسارة)
+          hasConflict = true;
+          confidence = Math.min(confidence, 30);
+          fieldConfidences.played = 20;
+          const msg = `خطأ حسابي حرج: لعب (${row.played}) لا يساوي مجموع (فوز ${row.won} + تعادل ${row.drawn} + خسارة ${row.lost} = ${sumPlayed})`;
           validationWarnings.push(msg);
           issues.push({
             field: 'played',
-            type: 'warning',
-            blocking: false,
+            type: 'conflict',
+            blocking: true,
             message: msg,
           });
+        }
+
+        if (typeof row.points === 'number') {
+          const expectedPoints =
+            row.won * activeRule.pointsWin +
+            row.drawn * activeRule.pointsDraw +
+            row.lost * activeRule.pointsLoss;
+          if (row.points > expectedPoints) {
+            // يستحيل رياضياً أن تزيد النقاط عن مجموع الفوز والتعادل
+            hasConflict = true;
+            confidence = Math.min(confidence, 30);
+            fieldConfidences.points = 20;
+            const msg = `خطأ حسابي حرج: النقاط (${row.points}) تتجاوز الحد الأقصى الممكن وفق لائحة البطولة (${expectedPoints})`;
+            validationWarnings.push(msg);
+            issues.push({
+              field: 'points',
+              type: 'conflict',
+              blocking: true,
+              message: msg,
+            });
+          } else if (row.points < expectedPoints) {
+            // قد يكون هناك خصم نقاط رسمي من الاتحاد، لذا يُعرض كتنبيه واضح للمراجع
+            const diff = expectedPoints - row.points;
+            confidence = Math.min(confidence, 72);
+            fieldConfidences.points = 65;
+            const msg = `تنبيه نقاط: النقاط (${row.points}) أقل من الحساب القياسي (${expectedPoints}) بفارق ${diff} — تحقق من وجود خصم نقاط رسمي`;
+            validationWarnings.push(msg);
+            issues.push({
+              field: 'points',
+              type: 'warning',
+              blocking: false,
+              message: msg,
+            });
+          }
         }
       }
 
@@ -377,6 +487,7 @@ export function validateExtractedImportRows(
         const key = `st:${normalizeArabicTeamName(row.teamName)}:${row.tableIndex || 1}`;
         if (seenInBatch.has(key)) {
           isDuplicate = true;
+          fieldConfidences.teamName = 25;
           const msg = `الفريق "${row.teamName}" مكرر في نفس الجدول`;
           validationWarnings.push(msg);
           issues.push({
@@ -399,44 +510,81 @@ export function validateExtractedImportRows(
       if (!pName || isValueUnclearOrMissing(pName)) {
         row.playerName = '';
         isUnclear = true;
+        fieldConfidences.playerName = 0;
         issues.push({
           field: 'playerName',
           type: 'unclear',
           blocking: true,
           message: 'اسم اللاعب غير واضح في المصدر',
         });
+      } else {
+        fieldConfidences.playerName = 96;
       }
       inspectTeam('teamName', 'نادي اللاعب');
       row.goals = parseScoreOrNull(row.goals ?? 0) ?? 0;
       row.assists = parseScoreOrNull(row.assists ?? 0) ?? 0;
       row.matches = parseScoreOrNull(row.matches ?? 1) ?? 1;
+      fieldConfidences.goals = 95;
+      fieldConfidences.assists = 95;
+      fieldConfidences.matches = 95;
     } else if (dataType === 'goalkeepers_stats') {
       const pName = String(row.playerName || '').trim();
       if (!pName || isValueUnclearOrMissing(pName)) {
         row.playerName = '';
         isUnclear = true;
+        fieldConfidences.playerName = 0;
         issues.push({
           field: 'playerName',
           type: 'unclear',
           blocking: true,
           message: 'اسم حارس المرمى غير واضح',
         });
+      } else {
+        fieldConfidences.playerName = 96;
       }
       inspectTeam('teamName', 'نادي الحارس');
       row.matches = parseScoreOrNull(row.matches ?? 1) ?? 1;
       row.cleanSheets = parseScoreOrNull(row.cleanSheets);
       row.goalsConceded = parseScoreOrNull(row.goalsConceded ?? 0) ?? 0;
+      fieldConfidences.matches = 95;
+      fieldConfidences.goalsConceded = 95;
       if (row.cleanSheets === null) {
         isUnclear = true;
+        fieldConfidences.cleanSheets = 0;
         issues.push({
           field: 'cleanSheets',
           type: 'unclear',
           blocking: true,
           message: 'عدد الشباك النظيفة غير واضح',
         });
+      } else if (typeof row.matches === 'number' && row.cleanSheets > row.matches) {
+        hasConflict = true;
+        confidence = Math.min(confidence, 25);
+        fieldConfidences.cleanSheets = 20;
+        const msg = `خطأ حسابي حرج: الشباك النظيفة (${row.cleanSheets}) أكبر من عدد المباريات (${row.matches})`;
+        validationWarnings.push(msg);
+        issues.push({
+          field: 'cleanSheets',
+          type: 'conflict',
+          blocking: true,
+          message: msg,
+        });
+      } else {
+        fieldConfidences.cleanSheets = 96;
       }
     } else if (dataType === 'teams_list') {
       inspectTeam('teamName', 'اسم الفريق');
+    }
+
+    // حساب متوسط الثقة الإجمالي من ثقة الحقول الأساسية
+    const confValues = Object.entries(fieldConfidences)
+      .filter(([k]) => k !== 'stadium' && k !== 'matchDate')
+      .map(([, v]) => v);
+    if (confValues.length > 0) {
+      const avgFieldConf = Math.round(
+        confValues.reduce((acc, n) => acc + n, 0) / confValues.length
+      );
+      confidence = Math.min(confidence, avgFieldConf);
     }
 
     const hasBlockingIssue = issues.some((i) => i.blocking);
@@ -445,6 +593,7 @@ export function validateExtractedImportRows(
     row.hasConflict = hasConflict;
     row.isReadyForApproval = !hasBlockingIssue;
     row.extractionConfidence = confidence;
+    row.fieldConfidences = fieldConfidences;
     row.validationWarnings = validationWarnings;
     row.unknownTeams = unknownTeams;
     row.issues = issues;
@@ -801,9 +950,9 @@ export function parseArabicSportsTextToRows(
   let currentTableTitle: string | undefined;
 
   for (const line of lines) {
-    // اكتشاف بداية جدول جديد أو مجموعة جديدة في نفس الصورة/النص
+    // اكتشاف بداية جدول جديد أو مجموعة جديدة في نفس الصورة/النص (عربي أو إنجليزي)
     if (
-      /^(?:جدول|المجموعة|مجموعة|المرحلة)\s+[\u0600-\u06FF0-9]+/i.test(line) &&
+      /^(?:جدول|المجموعة|مجموعة|المرحلة|Group|Table)\s+[\u0600-\u06FFa-zA-Z0-9]+/i.test(line) &&
       line.length < 42 &&
       !/\d+\s*[-:]\s*\d+/.test(line)
     ) {
@@ -814,8 +963,11 @@ export function parseArabicSportsTextToRows(
       continue;
     }
 
-    // التقاط عنوان الجولة إن وجد في سطر مستقل
-    if (/^(الجولة|جولة|الأسبوع|اسبوع)\s+[\u0600-\u06FF0-9]+$/i.test(line) && line.length < 30) {
+    // التقاط عنوان الجولة إن وجد في سطر مستقل (عربي أو إنجليزي)
+    if (
+      /^(?:الجولة|جولة|الأسبوع|اسبوع|Round|Matchweek|Week)\s+[\u0600-\u06FFa-zA-Z0-9]+$/i.test(line) &&
+      line.length < 30
+    ) {
       currentRound = line;
       continue;
     }
@@ -842,7 +994,11 @@ export function parseArabicSportsTextToRows(
         }
       }
     } else if (dataType === 'standings_table') {
-      if (/الفريق|النادي/.test(line) && /لعب|نقاط/.test(line) && !/\d/.test(line)) {
+      if (
+        ((/الفريق|النادي/.test(line) && /لعب|نقاط/.test(line)) ||
+          (/\b(team|club)\b/i.test(line) && /\b(pts|points|played|mp|pld|w)\b/i.test(line))) &&
+        !/\d/.test(line)
+      ) {
         if (rows.length > 0) currentTableIndex += 1;
         continue;
       }
@@ -876,7 +1032,7 @@ export function parseArabicSportsTextToRows(
       }
 
       const spaceMatch = cleanedLine.match(
-        /^([\u0600-\u06FFa-zA-Z\s]+?)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)(?:\s+[+-]?\d+)?\s+(\d+|غير واضح|\?+)$/
+        /^([\u0600-\u06FFa-zA-Z0-9.'\-\s]+?)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)\s+(\d+|غير واضح|\?+)(?:\s+[+-]?\d+)?\s+(\d+|غير واضح|\?+)$/
       );
       if (spaceMatch) {
         rows.push({
@@ -995,7 +1151,7 @@ export function parseSpreadsheetContentToRows(
   const headerMap: Record<string, number> = {};
   if (hasHeader) {
     firstCells.forEach((colName, idx) => {
-      const c = colName.toLowerCase();
+      const c = colName.trim().toLowerCase();
       if (/أهداف المستضيف|اهداف المستضيف|اهداف 1|أهداف 1|home_score|homescore|score1/.test(c))
         headerMap.homeScore = idx;
       else if (/أهداف الضيف|اهداف الضيف|اهداف 2|أهداف 2|away_score|awayscore|score2/.test(c))
@@ -1003,11 +1159,19 @@ export function parseSpreadsheetContentToRows(
       else if (/نتيجة|النتيجة|score|result/.test(c)) headerMap.combinedScore = idx;
       else if (/مستضيف|الفريق الأول|فريق 1|home/.test(c)) headerMap.homeTeam = idx;
       else if (/ضيف|الفريق الثاني|فريق 2|away/.test(c)) headerMap.awayTeam = idx;
-      else if (/جولة|الجولة|الأسبوع|round/.test(c)) headerMap.round = idx;
+      else if (/جولة|الجولة|الأسبوع|round|week|matchweek/.test(c)) headerMap.round = idx;
       else if (/ملعب|الملعب|ستاد|stadium|venue/.test(c)) headerMap.stadium = idx;
       else if (/تاريخ|التاريخ|date/.test(c)) headerMap.matchDate = idx;
       else if (/وقت|الوقت|الساعة|time/.test(c)) headerMap.matchTime = idx;
-      else if (/فريق|النادي|team/.test(c)) headerMap.teamName = idx;
+      else if (/فريق|النادي|team|club/.test(c)) headerMap.teamName = idx;
+      else if (/^لعب$|^مباريات$|^p$|^mp$|^pld$|^played$/.test(c)) headerMap.played = idx;
+      else if (/^فاز$|^فوز$|^w$|^won$|^wins$/.test(c)) headerMap.won = idx;
+      else if (/^تعادل$|^ت$|^d$|^draw$|^drawn$/.test(c)) headerMap.drawn = idx;
+      else if (/^خسر$|^خسارة$|^خ$|^l$|^lost$|^losses$/.test(c)) headerMap.lost = idx;
+      else if (/^له$|^أهداف له$|^gf$|^f$|^goals_for$|^goalsfor$/.test(c)) headerMap.goalsFor = idx;
+      else if (/^عليه$|^أهداف عليه$|^ga$|^a$|^goals_against$|^goalsagainst$/.test(c))
+        headerMap.goalsAgainst = idx;
+      else if (/^نقاط$|^النقاط$|^ن$|^pts$|^points$/.test(c)) headerMap.points = idx;
     });
   }
 
@@ -1020,33 +1184,69 @@ export function parseSpreadsheetContentToRows(
     const cells = splitCsvLine(line).filter((c, idx, arr) => !(arr.length === 1 && !c));
     if (cells.length === 0) continue;
 
-    // إذا كان السطر عبارة عن عنوان جولة مستقل داخل ملف Excel (مثل: "الجولة 2")
+    // إذا كان السطر عبارة عن عنوان جولة مستقل داخل ملف Excel (مثل: "الجولة 2" أو "Round 2")
     const nonEmptyCells = cells.filter(Boolean);
     if (
       nonEmptyCells.length === 1 &&
-      /^(الجولة|جولة|الأسبوع|اسبوع)\s+[\u0600-\u06FF0-9]+$/i.test(nonEmptyCells[0])
+      /^(?:الجولة|جولة|الأسبوع|اسبوع|Round|Matchweek|Week)\s+[\u0600-\u06FFa-zA-Z0-9]+$/i.test(
+        nonEmptyCells[0]
+      )
     ) {
       currentRound = nonEmptyCells[0];
       continue;
     }
 
     if (dataType === 'standings_table') {
-      if (nonEmptyCells.some((c) => /الفريق|النادي/.test(c) && /لعب|نقاط/.test(line))) {
+      if (
+        nonEmptyCells.some(
+          (c) =>
+            (/الفريق|النادي/.test(c) && /لعب|نقاط/.test(line)) ||
+            (/\b(team|club)\b/i.test(c) && /\b(pts|points|played|mp|pld)\b/i.test(line))
+        )
+      ) {
         currentTableIndex += 1;
         continue;
       }
+
+      if (
+        hasHeader &&
+        headerMap.teamName !== undefined &&
+        headerMap.played !== undefined &&
+        headerMap.points !== undefined
+      ) {
+        rows.push({
+          sourceFileName,
+          tableIndex: currentTableIndex,
+          teamName: cells[headerMap.teamName] || '',
+          played: parseScoreOrNull(cells[headerMap.played]),
+          won: headerMap.won !== undefined ? parseScoreOrNull(cells[headerMap.won]) : null,
+          drawn: headerMap.drawn !== undefined ? parseScoreOrNull(cells[headerMap.drawn]) : null,
+          lost: headerMap.lost !== undefined ? parseScoreOrNull(cells[headerMap.lost]) : null,
+          goalsFor:
+            headerMap.goalsFor !== undefined ? parseScoreOrNull(cells[headerMap.goalsFor] ?? 0) : 0,
+          goalsAgainst:
+            headerMap.goalsAgainst !== undefined
+              ? parseScoreOrNull(cells[headerMap.goalsAgainst] ?? 0)
+              : 0,
+          points: parseScoreOrNull(cells[headerMap.points]),
+        });
+        continue;
+      }
+
       const offset = /^\d+$/.test(cells[0]) && cells.length >= 8 ? 1 : 0;
+      const statsSlice = cells.slice(offset + 1);
+      // دعم الجداول ذات عمود الفارق GD (+/-) بأمان بحيث نأخذ النقاط دائماً من آخر عمود
       rows.push({
         sourceFileName,
         tableIndex: currentTableIndex,
         teamName: cells[offset] || '',
-        played: parseScoreOrNull(cells[offset + 1]),
-        won: parseScoreOrNull(cells[offset + 2]),
-        drawn: parseScoreOrNull(cells[offset + 3]),
-        lost: parseScoreOrNull(cells[offset + 4]),
-        goalsFor: parseScoreOrNull(cells[offset + 5] ?? 0),
-        goalsAgainst: parseScoreOrNull(cells[offset + 6] ?? 0),
-        points: parseScoreOrNull(cells[offset + 7] ?? cells[cells.length - 1]),
+        played: parseScoreOrNull(statsSlice[0]),
+        won: parseScoreOrNull(statsSlice[1]),
+        drawn: parseScoreOrNull(statsSlice[2]),
+        lost: parseScoreOrNull(statsSlice[3]),
+        goalsFor: statsSlice.length >= 7 ? parseScoreOrNull(statsSlice[4] ?? 0) : 0,
+        goalsAgainst: statsSlice.length >= 7 ? parseScoreOrNull(statsSlice[5] ?? 0) : 0,
+        points: parseScoreOrNull(statsSlice[statsSlice.length - 1]),
       });
     } else if (
       dataType === 'match_results' ||
@@ -1211,7 +1411,7 @@ export async function extractTextFromExcelBuffer(
   const bytes = new Uint8Array(buffer);
   const isZip = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
   if (!isZip || fileName.toLowerCase().endsWith('.csv') || fileName.toLowerCase().endsWith('.tsv')) {
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    return decodeSportsTextBufferUtf8(bytes);
   }
 
   try {
@@ -1317,7 +1517,7 @@ export async function extractTextFromExcelBuffer(
 export function extractTextFromPdfBuffer(buffer: ArrayBuffer): string {
   try {
     const bytes = new Uint8Array(buffer);
-    const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    const utf8Text = decodeSportsTextBufferUtf8(bytes);
 
     const extractedLines: string[] = [];
     const textBlocks = utf8Text.match(/\(([^()]{2,240})\)/g) || [];
@@ -1530,6 +1730,10 @@ export function normalizeAiJsonResponse(
           (dataType === 'match_schedule' && homeScore === null ? 'upcoming' : 'finished')) as MatchStatus,
         extractionConfidence:
           typeof item.extractionConfidence === 'number' ? item.extractionConfidence : 92,
+        fieldConfidences:
+          item.fieldConfidences && typeof item.fieldConfidences === 'object'
+            ? (item.fieldConfidences as Record<string, number>)
+            : undefined,
         teamName,
         played: parseScoreOrNull(item.played ?? item.p ?? item['لعب']),
         won: parseScoreOrNull(item.won ?? item.w ?? item['فاز']),
@@ -1658,7 +1862,8 @@ export async function extractSportsDataWithGeminiAI(params: {
       "matches": 0,
       "cleanSheets": 0,
       "goalsConceded": 0,
-      "extractionConfidence": 95
+      "extractionConfidence": 95,
+      "fieldConfidences": { "homeTeam": 98, "awayTeam": 98, "homeScore": 97, "awayScore": 97 }
     }
   ]
 }`;

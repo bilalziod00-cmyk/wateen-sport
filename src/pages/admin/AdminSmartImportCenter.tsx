@@ -49,6 +49,26 @@ import {
   extractTextFromPdfBuffer,
   validateExtractedImportRows,
 } from '../../utils/aiSmartImportEngine';
+import { preprocessImageDataUrlForOcr } from '../../utils/imageOcrPreprocess';
+
+function renderFieldConfidenceBadge(row: SmartImportExtractedRow, fieldKey: string) {
+  const score = row.fieldConfidences?.[fieldKey];
+  if (typeof score !== 'number') return null;
+  const colorClass =
+    score >= 90
+      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+      : score >= 60
+      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+      : 'bg-rose-500/20 text-rose-300 border-rose-500/40';
+  return (
+    <span
+      className={`inline-block px-1 py-0.2 rounded border text-[9px] font-black tabular-nums ${colorClass}`}
+      title={`نسبة ثقة استخراج الحقل: ${score}%`}
+    >
+      {score}%
+    </span>
+  );
+}
 
 const STATUS_BADGES: Record<ImportBatchStatus, { label: string; style: string }> = {
   'Pending Review': {
@@ -111,6 +131,7 @@ export const AdminSmartImportCenter: React.FC = () => {
     }[]
   >([]);
   const [pastedText, setPastedText] = useState<string>('');
+  const [enhanceImagesBeforeOcr, setEnhanceImagesBeforeOcr] = useState<boolean>(true);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
   const [activeBatchId, setActiveBatchId] = useState<string | null>(
@@ -203,17 +224,37 @@ export const AdminSmartImportCenter: React.FC = () => {
       } else {
         const dataUrl = await readFileAsDataUrl(file);
         const embeddedOcr = extractEmbeddedOcrTextFromImageBase64(dataUrl);
+        let finalBase64 = dataUrl;
+        let enhancedApplied = false;
+        let qualityGrade: 'high' | 'medium' | 'low' | undefined;
+        let qualityNotes: string[] | undefined;
+
+        if (enhanceImagesBeforeOcr) {
+          const pre = await preprocessImageDataUrlForOcr(dataUrl, {
+            grayscale: true,
+            contrastFactor: 1.42,
+            sharpen: true,
+          });
+          finalBase64 = pre.enhancedDataUrl;
+          enhancedApplied = pre.report.enhancedApplied;
+          qualityGrade = pre.report.qualityGrade;
+          qualityNotes = pre.report.notesAr;
+        }
+
         newStaged.push({
           meta: {
             id,
             name: file.name,
-            mimeType: file.type || 'image/jpeg',
+            mimeType: enhancedApplied ? 'image/png' : file.type || 'image/jpeg',
             format: 'image',
             previewDataUrl: dataUrl,
             rawTextPreview: embeddedOcr || undefined,
             sizeBytes: file.size,
+            enhancedForOcr: enhancedApplied,
+            ocrQualityGrade: qualityGrade,
+            ocrQualityNotes: qualityNotes,
           },
-          base64: dataUrl,
+          base64: finalBase64,
           extractedText: embeddedOcr || undefined,
         });
       }
@@ -920,8 +961,17 @@ export const AdminSmartImportCenter: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                ارفع صورة جدول نتائج أو ترتيب، ملف PDF، أو ملف Excel يحتوي على عدة جولات ليتم استخراجها وعرض النص المقروء للمقارنة.
+                ارفع صورة جدول نتائج أو ترتيب، ملف PDF، أو ملف Excel يحتوي على عدة جولات ليتم تحسين الصورة تلقائياً قبل OCR واستخراج البيانات.
               </p>
+              <label className="inline-flex items-center gap-2 text-[11px] font-bold text-emerald-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={enhanceImagesBeforeOcr}
+                  onChange={(e) => setEnhanceImagesBeforeOcr(e.target.checked)}
+                  className="accent-emerald-500 rounded"
+                />
+                تحسين وضوح وتباين الصور تلقائياً قبل القراءة (Pre-OCR Enhancement)
+              </label>
             </div>
 
             <label className="cursor-pointer rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 py-3 px-4 text-center text-xs font-black text-emerald-200 transition-colors">
@@ -954,6 +1004,11 @@ export const AdminSmartImportCenter: React.FC = () => {
                       <span className="text-[10px] text-slate-400">
                         ({Math.max(1, Math.round(sf.meta.sizeBytes / 1024))} KB)
                       </span>
+                      {sf.meta.enhancedForOcr && (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-[9px] font-bold text-emerald-300 shrink-0">
+                          OCR محسّن
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -1334,7 +1389,10 @@ export const AdminSmartImportCenter: React.FC = () => {
                       {activeBatch.dataType === 'standings_table' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-8 gap-2">
                           <div className="col-span-2">
-                            <label className="block text-[10px] text-slate-400">الفريق</label>
+                            <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>الفريق</span>
+                              {renderFieldConfidenceBadge(row, 'teamName')}
+                            </label>
                             <input
                               type="text"
                               list="wateen-teams-db"
@@ -1370,9 +1428,15 @@ export const AdminSmartImportCenter: React.FC = () => {
                               row[fieldKey] === null ||
                               row[fieldKey] === undefined ||
                               row[fieldKey] === '';
+                            const cellConflict = row.issues.some(
+                              (i) => i.field === fieldKey && i.blocking
+                            );
                             return (
                               <div key={fieldKey}>
-                                <label className="block text-[10px] text-slate-400">{labelAr}</label>
+                                <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                                  <span>{labelAr}</span>
+                                  {renderFieldConfidenceBadge(row, fieldKey)}
+                                </label>
                                 <input
                                   type="text"
                                   value={cellUnclear ? '' : String(row[fieldKey])}
@@ -1386,7 +1450,7 @@ export const AdminSmartImportCenter: React.FC = () => {
                                     )
                                   }
                                   className={`w-full rounded-lg px-2 py-1 text-xs font-black text-center border ${
-                                    cellUnclear
+                                    cellUnclear || cellConflict
                                       ? 'bg-rose-950/60 border-rose-500 text-rose-200 placeholder:text-rose-300/70'
                                       : 'bg-black/60 border-white/15 text-white'
                                   }`}
@@ -1400,8 +1464,9 @@ export const AdminSmartImportCenter: React.FC = () => {
                         activeBatch.dataType === 'rounds_data' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                           <div>
-                            <label className="block text-[10px] text-slate-400">
-                              الفريق الأول (المستضيف)
+                            <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>الفريق الأول (المستضيف)</span>
+                              {renderFieldConfidenceBadge(row, 'homeTeam')}
                             </label>
                             <input
                               type="text"
@@ -1424,7 +1489,10 @@ export const AdminSmartImportCenter: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">أهداف الأول</label>
+                            <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>أهداف الأول</span>
+                              {renderFieldConfidenceBadge(row, 'homeScore')}
+                            </label>
                             <input
                               type="text"
                               value={
@@ -1449,7 +1517,10 @@ export const AdminSmartImportCenter: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">أهداف الثاني</label>
+                            <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>أهداف الثاني</span>
+                              {renderFieldConfidenceBadge(row, 'awayScore')}
+                            </label>
                             <input
                               type="text"
                               value={
@@ -1474,8 +1545,9 @@ export const AdminSmartImportCenter: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">
-                              الفريق الثاني (الضيف)
+                            <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>الفريق الثاني (الضيف)</span>
+                              {renderFieldConfidenceBadge(row, 'awayTeam')}
                             </label>
                             <input
                               type="text"
@@ -1498,7 +1570,10 @@ export const AdminSmartImportCenter: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">الجولة</label>
+                            <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>الجولة</span>
+                              {renderFieldConfidenceBadge(row, 'roundNumber')}
+                            </label>
                             <input
                               type="text"
                               value={String(row.roundNumber ?? row.round ?? '')}
@@ -1514,8 +1589,9 @@ export const AdminSmartImportCenter: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-slate-400">
-                              الملعب (اختياري)
+                            <label className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>الملعب (اختياري)</span>
+                              {renderFieldConfidenceBadge(row, 'stadium')}
                             </label>
                             <input
                               type="text"
