@@ -1,7 +1,7 @@
 {
   "phase": 8,
   "title": "Scheduled Automation, Cache, Retries, Budget Caps & Offline Honesty Backup",
-  "createdAt": "2026-11-19T00:25:59.479Z",
+  "createdAt": "2026-11-19T00:37:22.597Z",
   "schemaVersion": 2,
   "automationSettingsDefaults": {
     "aiProvider": "openai",

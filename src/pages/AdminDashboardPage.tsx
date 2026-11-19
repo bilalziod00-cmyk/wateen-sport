@@ -6,6 +6,7 @@ import {
   Cloud,
   Cpu,
   Flame,
+  LayoutGrid,
   Lock,
   MessageSquareText,
   Newspaper,
@@ -30,25 +31,15 @@ import { AdminNewsSourcesAndQueue } from './admin/AdminNewsSourcesAndQueue';
 import { AdminPlayersInjuriesManager } from './admin/AdminPlayersInjuriesManager';
 import { AdminAiAssistantPage } from './admin/AdminAiAssistantPage';
 import { AdminAutomationAndBudget } from './admin/AdminAutomationAndBudget';
+import { AdminOverviewHub } from './admin/AdminOverviewHub';
+import { AdminDashboardTabId } from '../services/adminHubMetrics';
 import { isLiveMatchStatus } from '../utils/matchStatus';
 
-type AdminTab =
-  | 'smart_import'
-  | 'news_intel'
-  | 'automation_budget'
-  | 'ai_assistant'
-  | 'news'
-  | 'live'
-  | 'matches'
-  | 'standings'
-  | 'players_medical'
-  | 'auto_design'
-  | 'media_push'
-  | 'cloud';
+type AdminTab = AdminDashboardTabId;
 
 export const AdminDashboardPage: React.FC = () => {
   const { data, isAdminUnlocked, lockAdmin, cloudConnectionState } = useAppData();
-  const [tab, setTab] = useState<AdminTab>('smart_import');
+  const [tab, setTab] = useState<AdminTab>('overview');
 
   if (!isAdminUnlocked) {
     return <AdminLockScreen />;
@@ -73,6 +64,11 @@ export const AdminDashboardPage: React.FC = () => {
   const activeAlertsCount = (data.automationAlerts || []).filter((a) => !a.resolved).length;
 
   const tabs: { id: AdminTab; label: string; icon: React.ElementType; highlight?: boolean }[] = [
+    {
+      id: 'overview',
+      label: 'المركز الموحد (18)',
+      icon: LayoutGrid,
+    },
     {
       id: 'smart_import',
       label: `الإدخال الذكي AI${pendingImportsCount ? ` (${pendingImportsCount})` : ''}`,
@@ -189,6 +185,7 @@ export const AdminDashboardPage: React.FC = () => {
 
       {/* القسم النشط */}
       <div>
+        {tab === 'overview' && <AdminOverviewHub onNavigateTab={setTab} />}
         {tab === 'smart_import' && <AdminSmartImportCenter />}
         {tab === 'news_intel' && <AdminNewsSourcesAndQueue />}
         {tab === 'automation_budget' && <AdminAutomationAndBudget />}

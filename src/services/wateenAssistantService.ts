@@ -72,6 +72,12 @@ function detectCompetitionFromPrompt(
   if (/تحت 15|اشبال/.test(norm)) return { id: 'youth_u15', name: COMPETITIONS.youth_u15.name };
   if (/واعدين|براعم/.test(norm))
     return { id: 'youth_grassroots', name: COMPETITIONS.youth_grassroots.name };
+  if (/بطولات عربيه|بطوله عربيه|دوري روشن|السعودي|المصري/.test(norm))
+    return { id: 'arab_championships', name: COMPETITIONS.arab_championships.name };
+  if (/اسيويه|ابطال اسيا|كاس اسيا/.test(norm))
+    return { id: 'afc_competitions', name: COMPETITIONS.afc_competitions.name };
+  if (/عالميه|ابطال اوروبا|كاس العالم|دوريات عالميه/.test(norm))
+    return { id: 'global_leagues', name: COMPETITIONS.global_leagues.name };
   return null;
 }
 

@@ -184,6 +184,48 @@ export const COMPETITIONS: Record<CompetitionId, CompetitionMeta> = {
     ageCategory: 'المنتخبات الوطنية',
     defaultGroups: ['المجموعة الآسيوية'],
   },
+  arab_championships: {
+    id: 'arab_championships',
+    name: 'البطولات العربية للأندية والمنتخبات',
+    shortName: 'البطولات العربية',
+    subtitle: 'كأس الملك سلمان، البطولة العربية، والدوريات العربية الكبرى',
+    tierLabel: 'إقليمي عربي',
+    accentFrom: '#D97706',
+    accentTo: '#92400E',
+    badgeColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    season: '2026 / 2027',
+    ageCategory: 'الفريق الأول',
+    defaultGroups: ['دور المجموعات', 'ربع النهائي', 'نصف النهائي', 'النهائي'],
+    teamsCount: 16,
+  },
+  afc_competitions: {
+    id: 'afc_competitions',
+    name: 'البطولات الآسيوية (AFC)',
+    shortName: 'الآسيوية',
+    subtitle: 'دوري أبطال آسيا للنخبة، دوري الأبطال 2، وتصفيات المونديال',
+    tierLabel: 'قاري آسيوي',
+    accentFrom: '#2563EB',
+    accentTo: '#1E3A8A',
+    badgeColor: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+    season: '2026 / 2027',
+    ageCategory: 'الأندية والمنتخبات',
+    defaultGroups: ['مجموعة الغرب', 'مجموعة الشرق', 'الأدوار الإقصائية'],
+    teamsCount: 24,
+  },
+  global_leagues: {
+    id: 'global_leagues',
+    name: 'البطولات والدوريات العالمية',
+    shortName: 'العالمية',
+    subtitle: 'دوري أبطال أوروبا، الدوريات الخمس الكبرى، وكأس العالم FIFA',
+    tierLabel: 'عالمي',
+    accentFrom: '#7C3AED',
+    accentTo: '#4C1D95',
+    badgeColor: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+    season: '2026 / 2027',
+    ageCategory: 'نخبة العالم',
+    defaultGroups: ['الترتيب العام', 'مرحلة خروج المغلوب'],
+    teamsCount: 36,
+  },
   general: {
     id: 'general',
     name: 'أخبار الكرة الأردنية',
@@ -206,6 +248,12 @@ export const YOUTH_COMPETITION_IDS: CompetitionId[] = [
   'youth_grassroots',
 ];
 
+export const ARAB_GLOBAL_COMPETITION_IDS: CompetitionId[] = [
+  'arab_championships',
+  'afc_competitions',
+  'global_leagues',
+];
+
 export const PRIMARY_COMPETITION_LIST: CompetitionId[] = [
   'pro_league',
   'first_div',
@@ -218,6 +266,9 @@ export const PRIMARY_COMPETITION_LIST: CompetitionId[] = [
   'womens_league',
   'jordan_cup',
   'national_teams',
+  'arab_championships',
+  'afc_competitions',
+  'global_leagues',
 ];
 
 export const NEWS_TAG_LABELS: Record<NewsCategoryTag, { label: string; color: string }> = {

@@ -12,6 +12,9 @@ export type CompetitionId =
   | 'womens_league'
   | 'jordan_cup'
   | 'national_teams'
+  | 'arab_championships'
+  | 'afc_competitions'
+  | 'global_leagues'
   | 'general';
 
 export type MainCompetitionGroup =
@@ -22,7 +25,10 @@ export type MainCompetitionGroup =
   | 'youth'
   | 'womens_league'
   | 'jordan_cup'
-  | 'national_teams';
+  | 'national_teams'
+  | 'arab_championships'
+  | 'afc_competitions'
+  | 'global_leagues';
 
 export type NewsCategoryTag =
   | 'club_news'

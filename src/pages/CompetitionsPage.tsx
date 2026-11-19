@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronLeft,
   Flag,
+  Globe,
   Newspaper,
   Shield,
   Sparkles,
@@ -12,7 +13,12 @@ import {
   Users,
 } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
-import { COMPETITIONS, NEWS_TAG_LABELS, YOUTH_COMPETITION_IDS } from '../constants/competitions';
+import {
+  ARAB_GLOBAL_COMPETITION_IDS,
+  COMPETITIONS,
+  NEWS_TAG_LABELS,
+  YOUTH_COMPETITION_IDS,
+} from '../constants/competitions';
 import { CompetitionId, MatchItem, NewsArticle } from '../types/sports';
 import { StandingsTable, sortStandings } from '../components/StandingsTable';
 import { MatchCard } from '../components/MatchCard';
@@ -330,10 +336,10 @@ export const CompetitionsPage: React.FC<CompetitionsPageProps> = ({
   return (
     <div className="space-y-6 pb-6">
       <div className="rounded-3xl bg-gradient-to-l from-emerald-600/20 via-[#0E1621] to-[#0B121B] border border-emerald-500/25 p-5">
-        <h1 className="text-xl font-black text-white">البطولات الأردنية الشاملة</h1>
+        <h1 className="text-xl font-black text-white">دليل البطولات الشاملة</h1>
         <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
-          تغطية كاملة لكل الدرجات الكروية الأردنية، الفئات العمرية، كأس الأردن، والمنتخبات الوطنية مع
-          جداول الترتيب والهدافين والمباريات.
+          تغطية كاملة لكل الدرجات الكروية الأردنية والفئات العمرية والمنتخبات الوطنية، بالإضافة إلى
+          البطولات العربية والآسيوية والعالمية.
         </p>
       </div>
 
@@ -449,6 +455,51 @@ export const CompetitionsPage: React.FC<CompetitionsPageProps> = ({
                 <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{comp.subtitle}</p>
                 <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-teal-300">
                   <span>{formatArabicCount(stats.matches, 'مباراة', 'مباراتان', 'مباريات')}</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* البطولات العربية والآسيوية والعالمية */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-black text-slate-300 flex items-center gap-2">
+            <Globe className="w-4 h-4 text-sky-400" />
+            البطولات العربية والآسيوية والعالمية
+          </h2>
+          <span className="text-[11px] font-bold text-sky-300">تغطية إقليمية ودولية</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {ARAB_GLOBAL_COMPETITION_IDS.map((gid) => {
+            const comp = COMPETITIONS[gid];
+            const stats = countByComp[gid] || { matches: 0, live: 0, news: 0 };
+            return (
+              <button
+                key={gid}
+                type="button"
+                onClick={() => {
+                  setDetailTab('standings');
+                  onSelectCompetition(gid);
+                }}
+                className="text-right rounded-2xl bg-gradient-to-br from-[#101A29] to-[#0B121B] border border-sky-500/25 hover:border-sky-400/55 p-4 transition-all active:scale-[0.98]"
+              >
+                <span
+                  className="inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-black mb-2 border border-white/10"
+                  style={{ backgroundColor: `${comp.accentFrom}25`, color: comp.accentFrom }}
+                >
+                  {comp.tierLabel}
+                </span>
+                <h3 className="text-sm font-black text-white leading-snug">{comp.name}</h3>
+                <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{comp.subtitle}</p>
+                <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-sky-300">
+                  <span>
+                    {formatArabicCount(stats.matches, 'مباراة', 'مباراتان', 'مباريات')} •{' '}
+                    {stats.news} أخبار
+                  </span>
                   <ChevronLeft className="w-4 h-4" />
                 </div>
               </button>

@@ -252,6 +252,15 @@ export function inferNewsCompetitionId(title: string, content: string): Competit
   if (/تحت 17|الناشئين/.test(full)) return 'youth_u17';
   if (/تحت 15|الأشبال/.test(full)) return 'youth_u15';
   if (/البراعم|تحت 13|الفئات السنية/.test(full)) return 'youth_grassroots';
+  if (/دوري أبطال آسيا|كأس آسيا|الاتحاد الآسيوي|تصفيات آسيا|AFC/i.test(full)) {
+    return 'afc_competitions';
+  }
+  if (/البطولة العربية|دوري أبطال العرب|الاتحاد العربي|الدوري السعودي|دوري روشن|الدوري المصري|الدوري القطري|الدوري الإماراتي/.test(full)) {
+    return 'arab_championships';
+  }
+  if (/دوري أبطال أوروبا|الشامبيونز|كأس العالم|الدوري الإنجليزي|الدوري الإسباني|UEFA|FIFA|Champions League|Premier League/i.test(full)) {
+    return 'global_leagues';
+  }
   return 'pro_league';
 }
 
