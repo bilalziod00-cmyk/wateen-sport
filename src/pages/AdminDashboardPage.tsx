@@ -6,6 +6,7 @@ import {
   Cloud,
   Flame,
   Lock,
+  MessageSquareText,
   Newspaper,
   Palette,
   Radio,
@@ -26,11 +27,13 @@ import { AdminSmartImportCenter } from './admin/AdminSmartImportCenter';
 import { AdminAutoDesignStudio } from './admin/AdminAutoDesignStudio';
 import { AdminNewsSourcesAndQueue } from './admin/AdminNewsSourcesAndQueue';
 import { AdminPlayersInjuriesManager } from './admin/AdminPlayersInjuriesManager';
+import { AdminAiAssistantPage } from './admin/AdminAiAssistantPage';
 import { isLiveMatchStatus } from '../utils/matchStatus';
 
 type AdminTab =
   | 'smart_import'
   | 'news_intel'
+  | 'ai_assistant'
   | 'news'
   | 'live'
   | 'matches'
@@ -76,6 +79,7 @@ export const AdminDashboardPage: React.FC = () => {
       label: `الذكاء الإخباري${reviewQueueCount ? ` (${reviewQueueCount})` : ''}`,
       icon: Bot,
     },
+    { id: 'ai_assistant', label: 'المساعد الذكي AI', icon: MessageSquareText },
     { id: 'news', label: 'الأخبار والتحرير', icon: Newspaper },
     {
       id: 'live',
@@ -177,6 +181,7 @@ export const AdminDashboardPage: React.FC = () => {
       <div>
         {tab === 'smart_import' && <AdminSmartImportCenter />}
         {tab === 'news_intel' && <AdminNewsSourcesAndQueue />}
+        {tab === 'ai_assistant' && <AdminAiAssistantPage />}
         {tab === 'news' && <AdminNewsManager />}
         {tab === 'live' && <AdminLiveStreamManager />}
         {tab === 'matches' && <AdminMatchesManager />}
