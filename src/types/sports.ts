@@ -504,6 +504,11 @@ export interface HeroBanner {
   order: number;
 }
 
+export type CardExportSizePreset =
+  | 'instagram_square'
+  | 'instagram_portrait'
+  | 'facebook_landscape';
+
 export type AutoTemplateCardType =
   | 'matchday'
   | 'player_spotlight'
@@ -515,7 +520,11 @@ export type AutoTemplateCardType =
   | 'round_fixtures_card'
   | 'top_scorers_card'
   | 'goalkeepers_card'
-  | 'mvp_player_card';
+  | 'mvp_player_card'
+  | 'lineup_card'
+  | 'breaking_news_card'
+  | 'transfer_card'
+  | 'injury_card';
 
 export interface SportsGraphicCard {
   id: string;
@@ -529,6 +538,7 @@ export interface SportsGraphicCard {
   metrics: StatPair[];
   tableRows?: string[][];
   isApprovedSource?: boolean;
+  sizePreset?: CardExportSizePreset;
   createdAt: string;
 }
 

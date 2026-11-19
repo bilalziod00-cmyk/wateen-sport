@@ -1,0 +1,3097 @@
+{
+  "backupId": "bkp-1795047328618",
+  "createdAt": "2026-11-19T00:15:28.618Z",
+  "counts": {
+    "competitionsCount": 12,
+    "teamsCount": 35,
+    "matchesCount": 16,
+    "standingsCount": 49,
+    "scorersCount": 13,
+    "goalkeepersCount": 6,
+    "articlesCount": 7,
+    "importsCount": 0
+  },
+  "checksum": "chk-72f04020",
+  "state": {
+    "adminPin": "2026",
+    "updatedAt": "2026-11-19T00:15:28.606Z",
+    "banners": [
+      {
+        "id": "bn-1",
+        "badge": "تغطية خاصة • دوري المحترفين",
+        "title": "قمة إربد وعمّان تشعل سباق الصدارة في دوري المحترفين",
+        "subtitle": "تغطية لحظية، أرقام وتحليلات تكتيكية من قلب ستاد الحسن وستاد عمّان الدولي.",
+        "imageUrl": "./images/stadium-night.jpg",
+        "accentColor": "#10B981",
+        "active": true,
+        "linkedArticleId": "art-1",
+        "linkedCompetitionId": "pro_league",
+        "order": 1
+      },
+      {
+        "id": "bn-2",
+        "badge": "المنتخب الوطني • النشامى",
+        "title": "النشامى يرفعون وتيرة التحضيرات بقيادة التعمري والنعيمات",
+        "subtitle": "قراءة فنية في الجاهزية البدنية وخيارات الجهاز الفني قبل الاستحقاق القادم.",
+        "imageUrl": "./images/match-action.jpg",
+        "accentColor": "#E11D48",
+        "active": true,
+        "linkedArticleId": "art-2",
+        "linkedCompetitionId": "national_teams",
+        "order": 2
+      },
+      {
+        "id": "bn-3",
+        "badge": "الفئات العمرية • مستقبل الأردن",
+        "title": "جولة نارية في دوريات تحت 20 و17 و15 والواعدين",
+        "subtitle": "متابعة حصرية للمواهب الأردنية الصاعدة وأرقام الهدافين في جميع الملاعب.",
+        "imageUrl": "./images/stadium-night.jpg",
+        "accentColor": "#F59E0B",
+        "active": true,
+        "linkedArticleId": "art-5",
+        "linkedCompetitionId": "youth_u20",
+        "order": 3
+      }
+    ],
+    "articles": [
+      {
+        "id": "art-1",
+        "title": "عاجل: الحسين إربد يعزز صدارته بفوز مثير والفيصلي يطارد بفارق نقطتين",
+        "summary": "جولة مشتعلة في دوري المحترفين الأردني شهدت غزارة تهديفية وحضوراً جماهيرياً كبيراً في ستاد الحسن وستاد عمّان الدولي.",
+        "content": "واصل فريق الحسين إربد عروضه القوية في دوري المحترفين الأردني بعدما فرض إيقاعه العالي على مجريات اللقاء، مستفيداً من التحولات الهجومية السريعة والضغط العالي في الثلث الأخير.\n\nفي المقابل، أبقى الفيصلي على حظوظه مشتعلة بانتصار مهم خارج القواعد، فيما عاد الوحدات بنقاط ثمينة أبقته في دائرة المنافسة المباشرة على اللقب.\n\nوتشير قراءة \"وتين سبورت\" الرقمية إلى ارتفاع معدل الأهداف المسجلة في الدقائق الـ 15 الأخيرة بنسبة 28% مقارنة بالموسم الماضي، ما يعكس ارتفاع الجاهزية البدنية لأندية المقدمة.",
+        "competitionId": "pro_league",
+        "tag": "match_report",
+        "isBreaking": true,
+        "imageUrl": "./images/stadium-night.jpg",
+        "author": "فريق تحرير وتين سبورت",
+        "publishedAt": "2026-11-18T23:45:28.606Z",
+        "views": 4280,
+        "relatedMatchId": "m-pro-1",
+        "statsCard": {
+          "title": "ملخص الجولة الرقمي — دوري المحترفين",
+          "subtitle": "إحصائيات وتين سبورت الحصرية",
+          "items": [
+            {
+              "label": "إجمالي أهداف الجولة",
+              "value": "19 هدفاً",
+              "highlight": true
+            },
+            {
+              "label": "أعلى استحواذ",
+              "value": "63% الحسين إربد"
+            },
+            {
+              "label": "متوسط الحضور",
+              "value": "11,400 مشجع",
+              "highlight": true
+            },
+            {
+              "label": "الشباك النظيفة",
+              "value": "3 أندية"
+            }
+          ]
+        },
+        "isDemo": true
+      },
+      {
+        "id": "art-2",
+        "title": "النشامى يدخلون معسكراً مغلقاً في عمّان وتقرير طبي يطمئن الجماهير حول الجاهزية",
+        "summary": "الفحوصات الطبية تؤكد تعافي خط الوسط بالكامل وجاهزية المحترفين في الخارج للالتحاق بالتدريبات المسائية على ستاد عمّان الدولي.",
+        "content": "بدأ المنتخب الوطني الأردني (النشامى) تجمعه التحضيري في العاصمة عمّان وسط أجواء حماسية عالية، حيث ركّز الجهاز الفني على الجمل التكتيكية في الكرات الثابتة وبناء اللعب من الخلف.\n\nوأكد التقرير الطبي الصادر عن الكادر الطبي للمنتخب جاهزية جميع العناصر المستدعاة دون إصابات مقلقة، مع برنامج تأهيلي خاص للاعبين العائدين من ضغط المباريات القارية.\n\nوتترقب الجماهير الأردنية إعلان القائمة النهائية خلال الساعات القادمة مع وعود بظهور وجوه شابة متألقة من دوري المحترفين ومنتخب تحت 20 سنة.",
+        "competitionId": "national_teams",
+        "tag": "injuries",
+        "isBreaking": true,
+        "imageUrl": "./images/match-action.jpg",
+        "author": "قسم المنتخبات — وتين سبورت",
+        "publishedAt": "2026-11-18T22:15:28.606Z",
+        "views": 5910,
+        "statsCard": {
+          "title": "تقرير الجاهزية البدنية — النشامى",
+          "subtitle": "قبل المواجهة الدولية المرتقبة",
+          "items": [
+            {
+              "label": "نسبة جاهزية القائمة",
+              "value": "96%",
+              "highlight": true
+            },
+            {
+              "label": "المحترفون الملتحقون",
+              "value": "9 لاعبين"
+            },
+            {
+              "label": "الوجوه الشابة الجديدة",
+              "value": "3 مواهب"
+            },
+            {
+              "label": "الحصص التدريبية",
+              "value": "6 حصص في عمّان"
+            }
+          ]
+        },
+        "isDemo": true
+      },
+      {
+        "id": "art-3",
+        "title": "تحليل وتين الرقمي: كيف غيّر الرمثا والسلط معادلة التحولات السريعة هذا الموسم؟",
+        "summary": "قراءة تكتيكية بالأرقام تكشف سر الفعالية الهجومية للرمثا وتنظيم السلط الدفاعي في المباريات الكبرى.",
+        "content": "يعتمد الرمثا هذا الموسم على متوسط أعمار شاب يمنحه سرعة استثنائية في الارتداد الهجومي، حيث يسجل الفريق هدفاً كل 4.2 هجمة مرتدة منظمة، وهو أعلى معدل في دوري المحترفين.\n\nعلى الجهة الأخرى، نجح السلط في بناء منظومة دفاعية متماسكة بخطوط متقاربة قلّصت الفرص الخطيرة المتوقعة ضده (xGA) إلى 0.88 هدف فقط في المباراة الواحدة.\n\nهذه القفزة التكتيكية رفعت من مستوى التنافسية ومنحت المشجع الأردني مباريات عالية النسق حتى صافرة النهاية.",
+        "competitionId": "pro_league",
+        "tag": "tactical_analysis",
+        "isBreaking": false,
+        "imageUrl": "./images/match-action.jpg",
+        "author": "وحدة التحليل الرقمي — وتين سبورت",
+        "publishedAt": "2026-11-18T19:15:28.606Z",
+        "views": 2890,
+        "statsCard": {
+          "title": "مؤشر الكفاءة التكتيكية",
+          "subtitle": "مقارنة الأداء في آخر 5 جولات",
+          "items": [
+            {
+              "label": "سرعة التحول — الرمثا",
+              "value": "8.4 ثانية",
+              "highlight": true
+            },
+            {
+              "label": "الأهداف المتوقعة ضد السلط",
+              "value": "0.88 / مباراة"
+            },
+            {
+              "label": "دقة التمرير الأمامي",
+              "value": "81.5%"
+            },
+            {
+              "label": "الضغط العالي الناجح",
+              "value": "14.2 / مباراة",
+              "highlight": true
+            }
+          ]
+        },
+        "isDemo": true
+      },
+      {
+        "id": "art-4",
+        "title": "سوق الانتقالات: تحركات مكثفة في دوري الدرجة الأولى بين العربي وكفرسوم واتحاد الرمثا",
+        "summary": "الأندية الطامحة للصعود لدوري المحترفين تدعّم صفوفها بمهاجمين وأظهرة خبرة قبل انطلاق مرحلة الإياب الحاسمة.",
+        "content": "شهدت أروقة أندية دوري الدرجة الأولى الأردني حراكاً لافتاً في سوق الانتقالات، حيث أتم نادي العربي اتفاقه مع صانع ألعاب مميز لتعزيز خط الوسط، فيما وقّع كفرسوم مع قلب دفاع صاحب خبرة طويلة في دوري المحترفين.\n\nويحتدم الصراع على بطاقتي الصعود بين العربي واتحاد الرمثا وكفرسوم والبقعة، وسط تقارب نقطي كبير يجعل كل جولة بمثابة نهائي مبكر.",
+        "competitionId": "first_div",
+        "tag": "transfers",
+        "isBreaking": false,
+        "imageUrl": "./images/stadium-night.jpg",
+        "author": "مراسل المحافظات — وتين سبورت",
+        "publishedAt": "2026-11-18T16:15:28.606Z",
+        "views": 1940,
+        "statsCard": {
+          "title": "حراك ميركاتو الدرجة الأولى",
+          "subtitle": "أبرز أرقام سوق الانتقالات",
+          "items": [
+            {
+              "label": "صفقات مؤكدة هذا الأسبوع",
+              "value": "11 صفقة",
+              "highlight": true
+            },
+            {
+              "label": "أكثر المراكز طلباً",
+              "value": "مهاجم صريح"
+            },
+            {
+              "label": "فارق النقاط بين 1 و 4",
+              "value": "4 نقاط فقط"
+            },
+            {
+              "label": "الأندية الأكثر نشاطاً",
+              "value": "العربي • كفرسوم"
+            }
+          ]
+        },
+        "isDemo": true
+      },
+      {
+        "id": "art-5",
+        "title": "مواهب الفئات العمرية: تألق لافت لنجوم تحت 20 وتحت 17 وتصعيد 6 لاعبين للفريق الأول",
+        "summary": "أندية المحترفين تمنح الثقة لخريجي أكاديمياتها بعد العروض الاستثنائية في دوريات تحت 20 و17 و15 والواعدين.",
+        "content": "تثبت بطولات الفئات العمرية الأردنية مجدداً أنها الكنز الحقيقي لكرة القدم المحلية، بعدما شهدت الجولات الأخيرة بروز مواهب هجومية لافتة في فئات تحت 20 وتحت 17 وتحت 15 سنة، إضافة إلى مهرجانات الواعدين في مختلف محافظات المملكة.\n\nوأعلنت ثلاثة أندية في دوري المحترفين تصعيد 6 لاعبين من فرق الشباب للمشاركة في تدريبات الفريق الأول، بناءً على تقارير فنية وإحصائية رصدت تطورهم خلال الموسم الحالي.",
+        "competitionId": "youth_u20",
+        "tag": "club_news",
+        "isBreaking": false,
+        "imageUrl": "./images/match-action.jpg",
+        "author": "قسم الفئات العمرية — وتين سبورت",
+        "publishedAt": "2026-11-18T12:15:28.606Z",
+        "views": 2120,
+        "statsCard": {
+          "title": "حصاد الفئات العمرية الأردنية",
+          "subtitle": "تحت 20 • تحت 17 • تحت 15 • الواعدين",
+          "items": [
+            {
+              "label": "لاعبون مصعّدون للفريق الأول",
+              "value": "6 مواهب",
+              "highlight": true
+            },
+            {
+              "label": "معدل الأهداف في تحت 20",
+              "value": "3.4 هدف / لقاء"
+            },
+            {
+              "label": "مهرجانات الواعدين الشهرية",
+              "value": "8 محافظات"
+            },
+            {
+              "label": "أبرز فئة تهديفاً",
+              "value": "تحت 17 سنة"
+            }
+          ]
+        },
+        "isDemo": true
+      },
+      {
+        "id": "art-6",
+        "title": "دوري الدرجتين الثانية والثالثة: الكرمل والطرة يتصدران المشهد وحماس كبير في المفرق وعجلون",
+        "summary": "نتائج مثيرة ومنافسة جماهيرية متصاعدة في ملاعب الدرجة الثانية والثالثة مع بروز هدافين جدد من أندية المحافظات.",
+        "content": "حافظ نادي الكرمل على انطلاقته المميزة في دوري الدرجة الثانية الأردني وسط مطاردة قوية من الطرة ودوقرة والحصن، في جولة شهدت حضوراً جماهيرياً جميلاً على ملاعب الشمال والجنوب.\n\nأما في دوري الدرجة الثالثة، فقد خطفت أندية المفرق وعجلون ومؤتة الأنظار بأداء هجومي جريء ومواهب شابة تسعى لكتابة التاريخ والصعود نحو الدرجة الثانية.",
+        "competitionId": "second_div",
+        "tag": "club_news",
+        "isBreaking": false,
+        "imageUrl": "./images/stadium-night.jpg",
+        "author": "تغطية الدرجات — وتين سبورت",
+        "publishedAt": "2026-11-18T06:15:28.606Z",
+        "views": 1560,
+        "isDemo": true
+      },
+      {
+        "id": "art-7",
+        "title": "كأس الأردن: مواجهات نارية في ربع النهائي وترقب لمفاجآت أندية الدرجة الأولى",
+        "summary": "قرعة مثيرة تضع الكبار أمام اختبارات صعبة وملاعب عمّان وإربد والزرقاء تتأهب لليالي الكأس.",
+        "content": "تتجه أنظار عشاق الكرة الأردنية نحو مواجهات ربع نهائي كأس الأردن، حيث تسعى أندية القمة لتفادي مفاجآت الكأس المعروفة أمام فرق الدرجة الأولى المتعطشة لبلوغ المربع الذهبي.\n\nوستقام جميع المباريات بنظام خروج المغلوب من مباراة واحدة مع اللجوء مباشرة لركلات الترجيح في حال التعادل بالوقت الأصلي.",
+        "competitionId": "jordan_cup",
+        "tag": "official",
+        "isBreaking": false,
+        "imageUrl": "./images/match-action.jpg",
+        "author": "فريق تحرير وتين سبورت",
+        "publishedAt": "2026-11-18T00:15:28.606Z",
+        "views": 2430,
+        "isDemo": true
+      }
+    ],
+    "matches": [
+      {
+        "id": "m-pro-1",
+        "competitionId": "pro_league",
+        "round": "الأسبوع 14",
+        "homeTeam": "الحسين إربد",
+        "homeShort": "حسين",
+        "homeColor": "#EAB308",
+        "awayTeam": "الفيصلي",
+        "awayShort": "فيصلي",
+        "awayColor": "#38BDF8",
+        "homeScore": 2,
+        "awayScore": 1,
+        "status": "live",
+        "liveMinute": 74,
+        "kickoffIso": "2026-11-18T23:03:28.606Z",
+        "stadium": "ستاد الحسن - إربد",
+        "referee": "أدهم مخادمة",
+        "broadcast": "الأردن الرياضية",
+        "featured": true,
+        "events": [
+          {
+            "id": "ev1",
+            "minute": 19,
+            "team": "home",
+            "type": "goal",
+            "playerName": "محمود مرضي",
+            "detail": "تسديدة يسارية من حدود المنطقة"
+          },
+          {
+            "id": "ev2",
+            "minute": 41,
+            "team": "away",
+            "type": "goal",
+            "playerName": "أحمد العرسان",
+            "detail": "ركلة حرة مباشرة متقنة"
+          },
+          {
+            "id": "ev3",
+            "minute": 56,
+            "team": "away",
+            "type": "yellow_card",
+            "playerName": "براء مرعي"
+          },
+          {
+            "id": "ev4",
+            "minute": 67,
+            "team": "home",
+            "type": "goal",
+            "playerName": "مجدي عطار",
+            "detail": "رأسية بعد عرضية إحسان حداد"
+          }
+        ],
+        "stats": {
+          "possessionHome": 56,
+          "shotsHome": 13,
+          "shotsAway": 9,
+          "shotsOnTargetHome": 6,
+          "shotsOnTargetAway": 4,
+          "cornersHome": 7,
+          "cornersAway": 4,
+          "foulsHome": 10,
+          "foulsAway": 12
+        },
+        "homeTeamId": "tm_1nc18su",
+        "awayTeamId": "tm_1sd3lfe",
+        "isDemo": true
+      },
+      {
+        "id": "m-pro-2",
+        "competitionId": "pro_league",
+        "round": "الأسبوع 14",
+        "homeTeam": "الوحدات",
+        "homeShort": "وحدات",
+        "homeColor": "#10B981",
+        "awayTeam": "الرمثا",
+        "awayShort": "رمثا",
+        "awayColor": "#2563EB",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-19T03:15:28.606Z",
+        "stadium": "ستاد الملك عبدالله الثاني - القويسمة",
+        "referee": "أحمد يعقوب",
+        "broadcast": "الأردن الرياضية",
+        "featured": true,
+        "events": [],
+        "homeTeamId": "tm_1fe63er",
+        "awayTeamId": "tm_7sq4c2",
+        "isDemo": true
+      },
+      {
+        "id": "m-pro-3",
+        "competitionId": "pro_league",
+        "round": "الأسبوع 14",
+        "homeTeam": "السلط",
+        "homeShort": "سلط",
+        "homeColor": "#EF4444",
+        "awayTeam": "شباب الأردن",
+        "awayShort": "شباب",
+        "awayColor": "#DC2626",
+        "homeScore": 1,
+        "awayScore": 1,
+        "status": "finished",
+        "kickoffIso": "2026-11-18T18:15:28.606Z",
+        "stadium": "ملعب السلط",
+        "broadcast": "الأردن الرياضية",
+        "events": [
+          {
+            "id": "ev5",
+            "minute": 28,
+            "team": "home",
+            "type": "goal",
+            "playerName": "محمد عبدالمطلب"
+          },
+          {
+            "id": "ev6",
+            "minute": 82,
+            "team": "away",
+            "type": "goal",
+            "playerName": "خالد عصام"
+          }
+        ],
+        "stats": {
+          "possessionHome": 49,
+          "shotsHome": 10,
+          "shotsAway": 11,
+          "shotsOnTargetHome": 4,
+          "shotsOnTargetAway": 4,
+          "cornersHome": 5,
+          "cornersAway": 6,
+          "foulsHome": 14,
+          "foulsAway": 13
+        },
+        "homeTeamId": "tm_1cjoh8y",
+        "awayTeamId": "tm_1ep21px",
+        "isDemo": true
+      },
+      {
+        "id": "m-pro-4",
+        "competitionId": "pro_league",
+        "round": "الأسبوع 14",
+        "homeTeam": "الأهلي",
+        "homeShort": "أهلي",
+        "homeColor": "#F8FAFC",
+        "awayTeam": "الجزيرة",
+        "awayShort": "جزيرة",
+        "awayColor": "#E11D48",
+        "homeScore": 2,
+        "awayScore": 0,
+        "status": "finished",
+        "kickoffIso": "2026-11-18T02:15:28.606Z",
+        "stadium": "ملعب البترا - مدينة الحسين للشباب",
+        "events": [
+          {
+            "id": "ev7",
+            "minute": 33,
+            "team": "home",
+            "type": "goal",
+            "playerName": "أحمد أبو كبير"
+          },
+          {
+            "id": "ev8",
+            "minute": 76,
+            "team": "home",
+            "type": "goal",
+            "playerName": "يزن دهشان"
+          }
+        ],
+        "homeTeamId": "tm_gri96u",
+        "awayTeamId": "tm_12tt436",
+        "isDemo": true
+      },
+      {
+        "id": "m-d1-1",
+        "competitionId": "first_div",
+        "round": "الأسبوع 9",
+        "homeTeam": "العربي",
+        "homeShort": "عربي",
+        "homeColor": "#F59E0B",
+        "awayTeam": "كفرسوم",
+        "awayShort": "كفرسوم",
+        "awayColor": "#10B981",
+        "homeScore": 1,
+        "awayScore": 0,
+        "status": "live",
+        "liveMinute": 58,
+        "kickoffIso": "2026-11-18T23:15:28.606Z",
+        "stadium": "ستاد الأمير هاشم - الرمثا",
+        "featured": true,
+        "events": [
+          {
+            "id": "ev-d1-1",
+            "minute": 37,
+            "team": "home",
+            "type": "goal",
+            "playerName": "عمر الشطناوي"
+          }
+        ],
+        "stats": {
+          "possessionHome": 53,
+          "shotsHome": 8,
+          "shotsAway": 6,
+          "shotsOnTargetHome": 3,
+          "shotsOnTargetAway": 2,
+          "cornersHome": 4,
+          "cornersAway": 3,
+          "foulsHome": 9,
+          "foulsAway": 11
+        },
+        "homeTeamId": "tm_qre03e",
+        "awayTeamId": "tm_18663ai",
+        "isDemo": true
+      },
+      {
+        "id": "m-d1-2",
+        "competitionId": "first_div",
+        "round": "الأسبوع 9",
+        "homeTeam": "اتحاد الرمثا",
+        "homeShort": "اتحاد",
+        "homeColor": "#3B82F6",
+        "awayTeam": "البقعة",
+        "awayShort": "بقعة",
+        "awayColor": "#22C55E",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-20T13:00:00.000Z",
+        "stadium": "ستاد الأمير محمد - الزرقاء",
+        "events": [],
+        "homeTeamId": "tm_zv42sp",
+        "awayTeamId": "tm_1ofo42k",
+        "isDemo": true
+      },
+      {
+        "id": "m-d2-1",
+        "competitionId": "second_div",
+        "round": "الأسبوع 7",
+        "homeTeam": "الكرمل",
+        "homeShort": "كرمل",
+        "homeColor": "#0EA5E9",
+        "awayTeam": "الطرة",
+        "awayShort": "طرة",
+        "awayColor": "#EF4444",
+        "homeScore": 3,
+        "awayScore": 1,
+        "status": "finished",
+        "kickoffIso": "2026-11-17T22:15:28.606Z",
+        "stadium": "ستاد الحسن - إربد",
+        "events": [
+          {
+            "id": "ev-d2-1",
+            "minute": 15,
+            "team": "home",
+            "type": "goal",
+            "playerName": "بلال المومني"
+          },
+          {
+            "id": "ev-d2-2",
+            "minute": 44,
+            "team": "away",
+            "type": "goal",
+            "playerName": "معتز الدرابسة"
+          },
+          {
+            "id": "ev-d2-3",
+            "minute": 62,
+            "team": "home",
+            "type": "goal",
+            "playerName": "راشد بني هاني"
+          },
+          {
+            "id": "ev-d2-4",
+            "minute": 88,
+            "team": "home",
+            "type": "goal",
+            "playerName": "بلال المومني"
+          }
+        ],
+        "homeTeamId": "tm_7bsdnf",
+        "awayTeamId": "tm_120enfn",
+        "isDemo": true
+      },
+      {
+        "id": "m-d2-2",
+        "competitionId": "second_div",
+        "round": "الأسبوع 8",
+        "homeTeam": "دوقرة",
+        "homeShort": "دوقرة",
+        "homeColor": "#14B8A6",
+        "awayTeam": "الحصن",
+        "awayShort": "حصن",
+        "awayColor": "#A855F7",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-21T12:00:00.000Z",
+        "stadium": "ملعب جرش البلدي",
+        "events": [],
+        "homeTeamId": "tm_1nfo40c",
+        "awayTeamId": "tm_1kr8lum",
+        "isDemo": true
+      },
+      {
+        "id": "m-d3-1",
+        "competitionId": "third_div",
+        "round": "دور المجموعات - ج 5",
+        "homeTeam": "شباب المفرق",
+        "homeShort": "مفرق",
+        "homeColor": "#8B5CF6",
+        "awayTeam": "عجلون",
+        "awayShort": "عجلون",
+        "awayColor": "#10B981",
+        "homeScore": 2,
+        "awayScore": 2,
+        "status": "finished",
+        "kickoffIso": "2026-11-17T18:15:28.606Z",
+        "stadium": "ستاد الأمير علي - المفرق",
+        "events": [
+          {
+            "id": "ev-d3-1",
+            "minute": 22,
+            "team": "home",
+            "type": "goal",
+            "playerName": "سيف الخوالدة"
+          },
+          {
+            "id": "ev-d3-2",
+            "minute": 51,
+            "team": "away",
+            "type": "goal",
+            "playerName": "ليث الصمادي"
+          }
+        ],
+        "homeTeamId": "tm_72p2tt",
+        "awayTeamId": "tm_1s0pndy",
+        "isDemo": true
+      },
+      {
+        "id": "m-d3-2",
+        "competitionId": "third_div",
+        "round": "دور المجموعات - ج 6",
+        "homeTeam": "مؤتة",
+        "homeShort": "مؤتة",
+        "homeColor": "#F97316",
+        "awayTeam": "الهاشمية",
+        "awayShort": "هاشمية",
+        "awayColor": "#06B6D4",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-21T11:00:00.000Z",
+        "stadium": "ملعب الأمير فيصل - الكرك",
+        "events": [],
+        "homeTeamId": "tm_q15jtv",
+        "awayTeamId": "tm_fv0kq8",
+        "isDemo": true
+      },
+      {
+        "id": "m-u20-1",
+        "competitionId": "youth_u20",
+        "round": "الأسبوع 10",
+        "homeTeam": "الوحدات تحت 20",
+        "homeShort": "وحدات",
+        "homeColor": "#10B981",
+        "awayTeam": "الحسين تحت 20",
+        "awayShort": "حسين",
+        "awayColor": "#EAB308",
+        "homeScore": 2,
+        "awayScore": 1,
+        "status": "finished",
+        "kickoffIso": "2026-11-18T14:15:28.606Z",
+        "stadium": "ملعب البولو - مدينة الحسين للشباب",
+        "events": [
+          {
+            "id": "ev-u20-1",
+            "minute": 24,
+            "team": "home",
+            "type": "goal",
+            "playerName": "إبراهيم صبرة"
+          },
+          {
+            "id": "ev-u20-2",
+            "minute": 71,
+            "team": "home",
+            "type": "goal",
+            "playerName": "عودة الفاخوري"
+          }
+        ],
+        "homeTeamId": "tm_kdw4xg",
+        "awayTeamId": "tm_9liton",
+        "isDemo": true
+      },
+      {
+        "id": "m-u17-1",
+        "competitionId": "youth_u17",
+        "round": "الأسبوع 8",
+        "homeTeam": "الفيصلي تحت 17",
+        "homeShort": "فيصلي",
+        "homeColor": "#38BDF8",
+        "awayTeam": "الرمثا تحت 17",
+        "awayShort": "رمثا",
+        "awayColor": "#2563EB",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-20T12:00:00.000Z",
+        "stadium": "ملعب البولو - مدينة الحسين للشباب",
+        "events": [],
+        "homeTeamId": "tm_7fzu3p",
+        "awayTeamId": "tm_f4xrr1",
+        "isDemo": true
+      },
+      {
+        "id": "m-u15-1",
+        "competitionId": "youth_u15",
+        "round": "الأسبوع 7",
+        "homeTeam": "شباب الأردن تحت 15",
+        "homeShort": "شباب",
+        "homeColor": "#DC2626",
+        "awayTeam": "الأهلي تحت 15",
+        "awayShort": "أهلي",
+        "awayColor": "#E2E8F0",
+        "homeScore": 3,
+        "awayScore": 2,
+        "status": "finished",
+        "kickoffIso": "2026-11-17T20:15:28.606Z",
+        "stadium": "ملعب البترا - مدينة الحسين للشباب",
+        "events": [],
+        "homeTeamId": "tm_u6zkna",
+        "awayTeamId": "tm_pm9ddf",
+        "isDemo": true
+      },
+      {
+        "id": "m-gr-1",
+        "competitionId": "youth_grassroots",
+        "round": "مهرجان الواعدين - عمّان",
+        "homeTeam": "أكاديمية الفرسان",
+        "homeShort": "فرسان",
+        "homeColor": "#84CC16",
+        "awayTeam": "براعم عمّان",
+        "awayShort": "عمّان",
+        "awayColor": "#10B981",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-22T07:00:00.000Z",
+        "stadium": "ملعب البولو - مدينة الحسين للشباب",
+        "events": [],
+        "homeTeamId": "tm_gigjif",
+        "awayTeamId": "tm_kb1l5",
+        "isDemo": true
+      },
+      {
+        "id": "m-cup-1",
+        "competitionId": "jordan_cup",
+        "round": "ربع النهائي",
+        "homeTeam": "الوحدات",
+        "homeShort": "وحدات",
+        "homeColor": "#10B981",
+        "awayTeam": "الفيصلي",
+        "awayShort": "فيصلي",
+        "awayColor": "#38BDF8",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-23T17:00:00.000Z",
+        "stadium": "ستاد عمّان الدولي",
+        "broadcast": "الأردن الرياضية",
+        "featured": true,
+        "events": [],
+        "homeTeamId": "tm_1fe63er",
+        "awayTeamId": "tm_1sd3lfe",
+        "isDemo": true
+      },
+      {
+        "id": "m-nat-1",
+        "competitionId": "national_teams",
+        "round": "مباراة دولية ودية",
+        "homeTeam": "الأردن (النشامى)",
+        "homeShort": "الأردن",
+        "homeColor": "#E11D48",
+        "awayTeam": "العراق",
+        "awayShort": "العراق",
+        "awayColor": "#10B981",
+        "homeScore": 0,
+        "awayScore": 0,
+        "status": "upcoming",
+        "kickoffIso": "2026-11-24T17:00:00.000Z",
+        "stadium": "ستاد عمّان الدولي",
+        "broadcast": "الأردن الرياضية • الكأس",
+        "featured": true,
+        "events": [],
+        "homeTeamId": "tm_1g4wrph",
+        "awayTeamId": "tm_105uuk1",
+        "isDemo": true
+      }
+    ],
+    "standings": [
+      {
+        "id": "st-p1",
+        "competitionId": "pro_league",
+        "teamName": "الحسين إربد",
+        "shortName": "حسين",
+        "teamColor": "#EAB308",
+        "played": 14,
+        "won": 11,
+        "drawn": 2,
+        "lost": 1,
+        "goalsFor": 31,
+        "goalsAgainst": 9,
+        "points": 35,
+        "form": [
+          "W",
+          "W",
+          "D",
+          "W",
+          "W"
+        ],
+        "zone": "champion",
+        "teamId": "tm_1nc18su",
+        "isDemo": true
+      },
+      {
+        "id": "st-p2",
+        "competitionId": "pro_league",
+        "teamName": "الفيصلي",
+        "shortName": "فيصلي",
+        "teamColor": "#38BDF8",
+        "played": 14,
+        "won": 10,
+        "drawn": 3,
+        "lost": 1,
+        "goalsFor": 28,
+        "goalsAgainst": 11,
+        "points": 33,
+        "form": [
+          "W",
+          "D",
+          "W",
+          "W",
+          "W"
+        ],
+        "zone": "continental",
+        "teamId": "tm_1sd3lfe",
+        "isDemo": true
+      },
+      {
+        "id": "st-p3",
+        "competitionId": "pro_league",
+        "teamName": "الوحدات",
+        "shortName": "وحدات",
+        "teamColor": "#10B981",
+        "played": 13,
+        "won": 9,
+        "drawn": 2,
+        "lost": 2,
+        "goalsFor": 25,
+        "goalsAgainst": 10,
+        "points": 29,
+        "form": [
+          "W",
+          "W",
+          "L",
+          "W",
+          "D"
+        ],
+        "zone": "continental",
+        "teamId": "tm_1fe63er",
+        "isDemo": true
+      },
+      {
+        "id": "st-p4",
+        "competitionId": "pro_league",
+        "teamName": "الرمثا",
+        "shortName": "رمثا",
+        "teamColor": "#2563EB",
+        "played": 13,
+        "won": 7,
+        "drawn": 3,
+        "lost": 3,
+        "goalsFor": 20,
+        "goalsAgainst": 13,
+        "points": 24,
+        "form": [
+          "W",
+          "L",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_7sq4c2",
+        "isDemo": true
+      },
+      {
+        "id": "st-p5",
+        "competitionId": "pro_league",
+        "teamName": "السلط",
+        "shortName": "سلط",
+        "teamColor": "#EF4444",
+        "played": 14,
+        "won": 6,
+        "drawn": 4,
+        "lost": 4,
+        "goalsFor": 17,
+        "goalsAgainst": 14,
+        "points": 22,
+        "form": [
+          "D",
+          "W",
+          "D",
+          "L",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_1cjoh8y",
+        "isDemo": true
+      },
+      {
+        "id": "st-p6",
+        "competitionId": "pro_league",
+        "teamName": "الأهلي",
+        "shortName": "أهلي",
+        "teamColor": "#E2E8F0",
+        "played": 14,
+        "won": 5,
+        "drawn": 4,
+        "lost": 5,
+        "goalsFor": 16,
+        "goalsAgainst": 16,
+        "points": 19,
+        "form": [
+          "W",
+          "L",
+          "D",
+          "W",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_gri96u",
+        "isDemo": true
+      },
+      {
+        "id": "st-p7",
+        "competitionId": "pro_league",
+        "teamName": "شباب الأردن",
+        "shortName": "شباب",
+        "teamColor": "#DC2626",
+        "played": 14,
+        "won": 4,
+        "drawn": 5,
+        "lost": 5,
+        "goalsFor": 15,
+        "goalsAgainst": 19,
+        "points": 17,
+        "form": [
+          "D",
+          "L",
+          "W",
+          "D",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_1ep21px",
+        "isDemo": true
+      },
+      {
+        "id": "st-p8",
+        "competitionId": "pro_league",
+        "teamName": "الجزيرة",
+        "shortName": "جزيرة",
+        "teamColor": "#E11D48",
+        "played": 14,
+        "won": 4,
+        "drawn": 3,
+        "lost": 7,
+        "goalsFor": 13,
+        "goalsAgainst": 20,
+        "points": 15,
+        "form": [
+          "L",
+          "W",
+          "L",
+          "D",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_12tt436",
+        "isDemo": true
+      },
+      {
+        "id": "st-p9",
+        "competitionId": "pro_league",
+        "teamName": "الصريح",
+        "shortName": "صريح",
+        "teamColor": "#F97316",
+        "played": 14,
+        "won": 3,
+        "drawn": 4,
+        "lost": 7,
+        "goalsFor": 12,
+        "goalsAgainst": 22,
+        "points": 13,
+        "form": [
+          "L",
+          "D",
+          "L",
+          "W",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_1tgwg7l",
+        "isDemo": true
+      },
+      {
+        "id": "st-p10",
+        "competitionId": "pro_league",
+        "teamName": "معان",
+        "shortName": "معان",
+        "teamColor": "#A855F7",
+        "played": 14,
+        "won": 3,
+        "drawn": 3,
+        "lost": 8,
+        "goalsFor": 11,
+        "goalsAgainst": 24,
+        "points": 12,
+        "form": [
+          "L",
+          "L",
+          "D",
+          "L",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_1ft74ly",
+        "isDemo": true
+      },
+      {
+        "id": "st-p11",
+        "competitionId": "pro_league",
+        "teamName": "شباب العقبة",
+        "shortName": "عقبة",
+        "teamColor": "#06B6D4",
+        "played": 14,
+        "won": 2,
+        "drawn": 4,
+        "lost": 8,
+        "goalsFor": 10,
+        "goalsAgainst": 23,
+        "points": 10,
+        "form": [
+          "D",
+          "L",
+          "L",
+          "D",
+          "L"
+        ],
+        "zone": "relegation",
+        "teamId": "tm_1wzfbqq",
+        "isDemo": true
+      },
+      {
+        "id": "st-p12",
+        "competitionId": "pro_league",
+        "teamName": "مغير السرحان",
+        "shortName": "سرحان",
+        "teamColor": "#64748B",
+        "played": 14,
+        "won": 1,
+        "drawn": 3,
+        "lost": 10,
+        "goalsFor": 9,
+        "goalsAgainst": 26,
+        "points": 6,
+        "form": [
+          "L",
+          "L",
+          "D",
+          "L",
+          "L"
+        ],
+        "zone": "relegation",
+        "teamId": "tm_jrm9e3",
+        "isDemo": true
+      },
+      {
+        "id": "st-d1-1",
+        "competitionId": "first_div",
+        "teamName": "العربي",
+        "shortName": "عربي",
+        "teamColor": "#F59E0B",
+        "played": 9,
+        "won": 7,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 18,
+        "goalsAgainst": 6,
+        "points": 22,
+        "form": [
+          "W",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "promotion",
+        "teamId": "tm_qre03e",
+        "isDemo": true
+      },
+      {
+        "id": "st-d1-2",
+        "competitionId": "first_div",
+        "teamName": "اتحاد الرمثا",
+        "shortName": "اتحاد",
+        "teamColor": "#3B82F6",
+        "played": 9,
+        "won": 6,
+        "drawn": 2,
+        "lost": 1,
+        "goalsFor": 16,
+        "goalsAgainst": 8,
+        "points": 20,
+        "form": [
+          "W",
+          "D",
+          "W",
+          "W",
+          "D"
+        ],
+        "zone": "promotion",
+        "teamId": "tm_zv42sp",
+        "isDemo": true
+      },
+      {
+        "id": "st-d1-3",
+        "competitionId": "first_div",
+        "teamName": "كفرسوم",
+        "shortName": "كفرسوم",
+        "teamColor": "#10B981",
+        "played": 9,
+        "won": 5,
+        "drawn": 3,
+        "lost": 1,
+        "goalsFor": 14,
+        "goalsAgainst": 7,
+        "points": 18,
+        "form": [
+          "D",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_18663ai",
+        "isDemo": true
+      },
+      {
+        "id": "st-d1-4",
+        "competitionId": "first_div",
+        "teamName": "البقعة",
+        "shortName": "بقعة",
+        "teamColor": "#22C55E",
+        "played": 9,
+        "won": 5,
+        "drawn": 2,
+        "lost": 2,
+        "goalsFor": 13,
+        "goalsAgainst": 9,
+        "points": 17,
+        "form": [
+          "W",
+          "L",
+          "W",
+          "W",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_1ofo42k",
+        "isDemo": true
+      },
+      {
+        "id": "st-d1-5",
+        "competitionId": "first_div",
+        "teamName": "الجليل",
+        "shortName": "جليل",
+        "teamColor": "#EF4444",
+        "played": 9,
+        "won": 4,
+        "drawn": 2,
+        "lost": 3,
+        "goalsFor": 12,
+        "goalsAgainst": 10,
+        "points": 14,
+        "form": [
+          "L",
+          "W",
+          "D",
+          "W",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_bnskt4",
+        "isDemo": true
+      },
+      {
+        "id": "st-d1-6",
+        "competitionId": "first_div",
+        "teamName": "سحاب",
+        "shortName": "سحاب",
+        "teamColor": "#0EA5E9",
+        "played": 9,
+        "won": 3,
+        "drawn": 3,
+        "lost": 3,
+        "goalsFor": 10,
+        "goalsAgainst": 11,
+        "points": 12,
+        "form": [
+          "D",
+          "L",
+          "W",
+          "D",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_cm1bua",
+        "isDemo": true
+      },
+      {
+        "id": "st-d1-7",
+        "competitionId": "first_div",
+        "teamName": "اليرموك",
+        "shortName": "يرموك",
+        "teamColor": "#F43F5E",
+        "played": 9,
+        "won": 2,
+        "drawn": 2,
+        "lost": 5,
+        "goalsFor": 8,
+        "goalsAgainst": 14,
+        "points": 8,
+        "form": [
+          "L",
+          "L",
+          "D",
+          "W",
+          "L"
+        ],
+        "zone": "relegation",
+        "teamId": "tm_tecl0z",
+        "isDemo": true
+      },
+      {
+        "id": "st-d2-1",
+        "competitionId": "second_div",
+        "teamName": "الكرمل",
+        "shortName": "كرمل",
+        "teamColor": "#0EA5E9",
+        "played": 7,
+        "won": 6,
+        "drawn": 1,
+        "lost": 0,
+        "goalsFor": 17,
+        "goalsAgainst": 5,
+        "points": 19,
+        "form": [
+          "W",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "promotion",
+        "teamId": "tm_7bsdnf",
+        "isDemo": true
+      },
+      {
+        "id": "st-d2-2",
+        "competitionId": "second_div",
+        "teamName": "الطرة",
+        "shortName": "طرة",
+        "teamColor": "#EF4444",
+        "played": 7,
+        "won": 5,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 14,
+        "goalsAgainst": 7,
+        "points": 16,
+        "form": [
+          "W",
+          "W",
+          "L",
+          "W",
+          "D"
+        ],
+        "zone": "promotion",
+        "teamId": "tm_120enfn",
+        "isDemo": true
+      },
+      {
+        "id": "st-d2-3",
+        "competitionId": "second_div",
+        "teamName": "دوقرة",
+        "shortName": "دوقرة",
+        "teamColor": "#14B8A6",
+        "played": 7,
+        "won": 4,
+        "drawn": 2,
+        "lost": 1,
+        "goalsFor": 12,
+        "goalsAgainst": 6,
+        "points": 14,
+        "form": [
+          "D",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_1nfo40c",
+        "isDemo": true
+      },
+      {
+        "id": "st-d2-4",
+        "competitionId": "second_div",
+        "teamName": "الحصن",
+        "shortName": "حصن",
+        "teamColor": "#A855F7",
+        "played": 7,
+        "won": 3,
+        "drawn": 2,
+        "lost": 2,
+        "goalsFor": 10,
+        "goalsAgainst": 9,
+        "points": 11,
+        "form": [
+          "W",
+          "D",
+          "L",
+          "W",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_1kr8lum",
+        "isDemo": true
+      },
+      {
+        "id": "st-d2-5",
+        "competitionId": "second_div",
+        "teamName": "الطفيلة",
+        "shortName": "طفيلة",
+        "teamColor": "#F59E0B",
+        "played": 7,
+        "won": 2,
+        "drawn": 1,
+        "lost": 4,
+        "goalsFor": 8,
+        "goalsAgainst": 13,
+        "points": 7,
+        "form": [
+          "L",
+          "W",
+          "L",
+          "L",
+          "D"
+        ],
+        "zone": "relegation",
+        "teamId": "tm_9c3slh",
+        "isDemo": true
+      },
+      {
+        "id": "st-d3-1",
+        "competitionId": "third_div",
+        "teamName": "شباب المفرق",
+        "shortName": "مفرق",
+        "teamColor": "#8B5CF6",
+        "played": 5,
+        "won": 4,
+        "drawn": 1,
+        "lost": 0,
+        "goalsFor": 13,
+        "goalsAgainst": 4,
+        "points": 13,
+        "form": [
+          "W",
+          "W",
+          "W",
+          "W",
+          "D"
+        ],
+        "zone": "promotion",
+        "teamId": "tm_72p2tt",
+        "isDemo": true
+      },
+      {
+        "id": "st-d3-2",
+        "competitionId": "third_div",
+        "teamName": "عجلون",
+        "shortName": "عجلون",
+        "teamColor": "#10B981",
+        "played": 5,
+        "won": 3,
+        "drawn": 2,
+        "lost": 0,
+        "goalsFor": 11,
+        "goalsAgainst": 5,
+        "points": 11,
+        "form": [
+          "W",
+          "D",
+          "W",
+          "W",
+          "D"
+        ],
+        "zone": "promotion",
+        "teamId": "tm_1s0pndy",
+        "isDemo": true
+      },
+      {
+        "id": "st-d3-3",
+        "competitionId": "third_div",
+        "teamName": "مؤتة",
+        "shortName": "مؤتة",
+        "teamColor": "#F97316",
+        "played": 5,
+        "won": 3,
+        "drawn": 0,
+        "lost": 2,
+        "goalsFor": 9,
+        "goalsAgainst": 7,
+        "points": 9,
+        "form": [
+          "W",
+          "L",
+          "W",
+          "W",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_q15jtv",
+        "isDemo": true
+      },
+      {
+        "id": "st-d3-4",
+        "competitionId": "third_div",
+        "teamName": "الهاشمية",
+        "shortName": "هاشمية",
+        "teamColor": "#06B6D4",
+        "played": 5,
+        "won": 2,
+        "drawn": 1,
+        "lost": 2,
+        "goalsFor": 7,
+        "goalsAgainst": 8,
+        "points": 7,
+        "form": [
+          "L",
+          "W",
+          "D",
+          "L",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_fv0kq8",
+        "isDemo": true
+      },
+      {
+        "id": "st-u20-1",
+        "competitionId": "youth_u20",
+        "teamName": "الوحدات تحت 20",
+        "shortName": "وحدات",
+        "teamColor": "#10B981",
+        "played": 10,
+        "won": 8,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 26,
+        "goalsAgainst": 8,
+        "points": 25,
+        "form": [
+          "W",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "champion",
+        "teamId": "tm_kdw4xg",
+        "isDemo": true
+      },
+      {
+        "id": "st-u20-2",
+        "competitionId": "youth_u20",
+        "teamName": "الحسين تحت 20",
+        "shortName": "حسين",
+        "teamColor": "#EAB308",
+        "played": 10,
+        "won": 7,
+        "drawn": 1,
+        "lost": 2,
+        "goalsFor": 22,
+        "goalsAgainst": 10,
+        "points": 22,
+        "form": [
+          "W",
+          "W",
+          "L",
+          "W",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_9liton",
+        "isDemo": true
+      },
+      {
+        "id": "st-u20-3",
+        "competitionId": "youth_u20",
+        "teamName": "الفيصلي تحت 20",
+        "shortName": "فيصلي",
+        "teamColor": "#38BDF8",
+        "played": 10,
+        "won": 6,
+        "drawn": 2,
+        "lost": 2,
+        "goalsFor": 19,
+        "goalsAgainst": 11,
+        "points": 20,
+        "form": [
+          "D",
+          "W",
+          "W",
+          "W",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_1a0q20r",
+        "isDemo": true
+      },
+      {
+        "id": "st-u20-4",
+        "competitionId": "youth_u20",
+        "teamName": "الرمثا تحت 20",
+        "shortName": "رمثا",
+        "teamColor": "#2563EB",
+        "played": 10,
+        "won": 5,
+        "drawn": 2,
+        "lost": 3,
+        "goalsFor": 18,
+        "goalsAgainst": 13,
+        "points": 17,
+        "form": [
+          "W",
+          "D",
+          "L",
+          "W",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_18u0pgz",
+        "isDemo": true
+      },
+      {
+        "id": "st-u17-1",
+        "competitionId": "youth_u17",
+        "teamName": "الفيصلي تحت 17",
+        "shortName": "فيصلي",
+        "teamColor": "#38BDF8",
+        "played": 8,
+        "won": 7,
+        "drawn": 0,
+        "lost": 1,
+        "goalsFor": 21,
+        "goalsAgainst": 6,
+        "points": 21,
+        "form": [
+          "W",
+          "W",
+          "W",
+          "L",
+          "W"
+        ],
+        "zone": "champion",
+        "teamId": "tm_7fzu3p",
+        "isDemo": true
+      },
+      {
+        "id": "st-u17-2",
+        "competitionId": "youth_u17",
+        "teamName": "الوحدات تحت 17",
+        "shortName": "وحدات",
+        "teamColor": "#10B981",
+        "played": 8,
+        "won": 6,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 19,
+        "goalsAgainst": 7,
+        "points": 19,
+        "form": [
+          "W",
+          "D",
+          "W",
+          "W",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_1f6xhfa",
+        "isDemo": true
+      },
+      {
+        "id": "st-u17-3",
+        "competitionId": "youth_u17",
+        "teamName": "الرمثا تحت 17",
+        "shortName": "رمثا",
+        "teamColor": "#2563EB",
+        "played": 8,
+        "won": 5,
+        "drawn": 1,
+        "lost": 2,
+        "goalsFor": 16,
+        "goalsAgainst": 9,
+        "points": 16,
+        "form": [
+          "W",
+          "W",
+          "L",
+          "D",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_f4xrr1",
+        "isDemo": true
+      },
+      {
+        "id": "st-u15-1",
+        "competitionId": "youth_u15",
+        "teamName": "شباب الأردن تحت 15",
+        "shortName": "شباب",
+        "teamColor": "#DC2626",
+        "played": 7,
+        "won": 6,
+        "drawn": 1,
+        "lost": 0,
+        "goalsFor": 20,
+        "goalsAgainst": 6,
+        "points": 19,
+        "form": [
+          "W",
+          "W",
+          "D",
+          "W",
+          "W"
+        ],
+        "zone": "champion",
+        "teamId": "tm_u6zkna",
+        "isDemo": true
+      },
+      {
+        "id": "st-u15-2",
+        "competitionId": "youth_u15",
+        "teamName": "الأهلي تحت 15",
+        "shortName": "أهلي",
+        "teamColor": "#E2E8F0",
+        "played": 7,
+        "won": 5,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 16,
+        "goalsAgainst": 8,
+        "points": 16,
+        "form": [
+          "W",
+          "L",
+          "W",
+          "W",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_pm9ddf",
+        "isDemo": true
+      },
+      {
+        "id": "st-u15-3",
+        "competitionId": "youth_u15",
+        "teamName": "الحسين تحت 15",
+        "shortName": "حسين",
+        "teamColor": "#EAB308",
+        "played": 7,
+        "won": 4,
+        "drawn": 2,
+        "lost": 1,
+        "goalsFor": 14,
+        "goalsAgainst": 9,
+        "points": 14,
+        "form": [
+          "D",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_13a0msz",
+        "isDemo": true
+      },
+      {
+        "id": "st-gr-1",
+        "competitionId": "youth_grassroots",
+        "teamName": "أكاديمية الفرسان",
+        "shortName": "فرسان",
+        "teamColor": "#84CC16",
+        "played": 6,
+        "won": 5,
+        "drawn": 1,
+        "lost": 0,
+        "goalsFor": 18,
+        "goalsAgainst": 5,
+        "points": 16,
+        "form": [
+          "W",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "champion",
+        "teamId": "tm_gigjif",
+        "isDemo": true
+      },
+      {
+        "id": "st-gr-2",
+        "competitionId": "youth_grassroots",
+        "teamName": "براعم عمّان",
+        "shortName": "عمّان",
+        "teamColor": "#10B981",
+        "played": 6,
+        "won": 4,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 15,
+        "goalsAgainst": 7,
+        "points": 13,
+        "form": [
+          "W",
+          "L",
+          "W",
+          "W",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_kb1l5",
+        "isDemo": true
+      },
+      {
+        "id": "st-gr-3",
+        "competitionId": "youth_grassroots",
+        "teamName": "مواهب إربد",
+        "shortName": "إربد",
+        "teamColor": "#F59E0B",
+        "played": 6,
+        "won": 4,
+        "drawn": 0,
+        "lost": 2,
+        "goalsFor": 14,
+        "goalsAgainst": 9,
+        "points": 12,
+        "form": [
+          "W",
+          "W",
+          "L",
+          "W",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_uv1e3e",
+        "isDemo": true
+      },
+      {
+        "id": "st-w-1",
+        "competitionId": "womens_league",
+        "teamName": "الاتحاد للسيدات",
+        "shortName": "الاتحاد",
+        "teamColor": "#EC4899",
+        "played": 8,
+        "won": 7,
+        "drawn": 1,
+        "lost": 0,
+        "goalsFor": 24,
+        "goalsAgainst": 4,
+        "points": 22,
+        "form": [
+          "W",
+          "W",
+          "W",
+          "D",
+          "W"
+        ],
+        "zone": "champion",
+        "teamId": "tm_68jaos",
+        "isDemo": true
+      },
+      {
+        "id": "st-w-2",
+        "competitionId": "womens_league",
+        "teamName": "عمان FC للسيدات",
+        "shortName": "عمان FC",
+        "teamColor": "#10B981",
+        "played": 8,
+        "won": 6,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 20,
+        "goalsAgainst": 6,
+        "points": 19,
+        "form": [
+          "W",
+          "W",
+          "L",
+          "W",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_1j38xk8",
+        "isDemo": true
+      },
+      {
+        "id": "st-w-3",
+        "competitionId": "womens_league",
+        "teamName": "الأرثوذكسي للسيدات",
+        "shortName": "الأرثوذكسي",
+        "teamColor": "#EF4444",
+        "played": 8,
+        "won": 4,
+        "drawn": 2,
+        "lost": 2,
+        "goalsFor": 15,
+        "goalsAgainst": 9,
+        "points": 14,
+        "form": [
+          "D",
+          "W",
+          "W",
+          "L",
+          "D"
+        ],
+        "zone": "none",
+        "teamId": "tm_91e0c5",
+        "isDemo": true
+      },
+      {
+        "id": "st-w-4",
+        "competitionId": "womens_league",
+        "teamName": "النصر للسيدات",
+        "shortName": "النصر",
+        "teamColor": "#3B82F6",
+        "played": 8,
+        "won": 3,
+        "drawn": 1,
+        "lost": 4,
+        "goalsFor": 11,
+        "goalsAgainst": 14,
+        "points": 10,
+        "form": [
+          "L",
+          "W",
+          "L",
+          "W",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_juoume",
+        "isDemo": true
+      },
+      {
+        "id": "st-nat-1",
+        "competitionId": "national_teams",
+        "teamName": "الأردن (النشامى)",
+        "shortName": "الأردن",
+        "teamColor": "#E11D48",
+        "played": 6,
+        "won": 4,
+        "drawn": 2,
+        "lost": 0,
+        "goalsFor": 13,
+        "goalsAgainst": 4,
+        "points": 14,
+        "form": [
+          "W",
+          "D",
+          "W",
+          "W",
+          "D"
+        ],
+        "zone": "champion",
+        "teamId": "tm_1g4wrph",
+        "isDemo": true
+      },
+      {
+        "id": "st-nat-2",
+        "competitionId": "national_teams",
+        "teamName": "كوريا الجنوبية",
+        "shortName": "كوريا",
+        "teamColor": "#EF4444",
+        "played": 6,
+        "won": 4,
+        "drawn": 1,
+        "lost": 1,
+        "goalsFor": 12,
+        "goalsAgainst": 5,
+        "points": 13,
+        "form": [
+          "W",
+          "W",
+          "D",
+          "L",
+          "W"
+        ],
+        "zone": "continental",
+        "teamId": "tm_1ncv3jd",
+        "isDemo": true
+      },
+      {
+        "id": "st-nat-3",
+        "competitionId": "national_teams",
+        "teamName": "العراق",
+        "shortName": "العراق",
+        "teamColor": "#10B981",
+        "played": 6,
+        "won": 3,
+        "drawn": 2,
+        "lost": 1,
+        "goalsFor": 9,
+        "goalsAgainst": 6,
+        "points": 11,
+        "form": [
+          "D",
+          "W",
+          "W",
+          "D",
+          "L"
+        ],
+        "zone": "none",
+        "teamId": "tm_105uuk1",
+        "isDemo": true
+      },
+      {
+        "id": "st-nat-4",
+        "competitionId": "national_teams",
+        "teamName": "عُمان",
+        "shortName": "عُمان",
+        "teamColor": "#F97316",
+        "played": 6,
+        "won": 2,
+        "drawn": 1,
+        "lost": 3,
+        "goalsFor": 7,
+        "goalsAgainst": 9,
+        "points": 7,
+        "form": [
+          "L",
+          "W",
+          "L",
+          "D",
+          "W"
+        ],
+        "zone": "none",
+        "teamId": "tm_1xmosqm",
+        "isDemo": true
+      }
+    ],
+    "goalkeepers": [
+      {
+        "id": "gk-1",
+        "competitionId": "pro_league",
+        "playerName": "يزيد أبو ليلى",
+        "teamName": "الحسين إربد",
+        "teamColor": "#EAB308",
+        "matches": 14,
+        "cleanSheets": 9,
+        "goalsConceded": 6,
+        "saves": 38,
+        "teamId": "tm_1nc18su",
+        "isDemo": true
+      },
+      {
+        "id": "gk-2",
+        "competitionId": "pro_league",
+        "playerName": "عبدالله الفاخوري",
+        "teamName": "الوحدات",
+        "teamColor": "#10B981",
+        "matches": 14,
+        "cleanSheets": 7,
+        "goalsConceded": 10,
+        "saves": 34,
+        "teamId": "tm_1fe63er",
+        "isDemo": true
+      },
+      {
+        "id": "gk-3",
+        "competitionId": "pro_league",
+        "playerName": "نور بني عطية",
+        "teamName": "الفيصلي",
+        "teamColor": "#38BDF8",
+        "matches": 14,
+        "cleanSheets": 6,
+        "goalsConceded": 11,
+        "saves": 31,
+        "teamId": "tm_1sd3lfe",
+        "isDemo": true
+      },
+      {
+        "id": "gk-4",
+        "competitionId": "pro_league",
+        "playerName": "مالك شلبية",
+        "teamName": "الرمثا",
+        "teamColor": "#2563EB",
+        "matches": 13,
+        "cleanSheets": 5,
+        "goalsConceded": 13,
+        "saves": 29,
+        "teamId": "tm_7sq4c2",
+        "isDemo": true
+      },
+      {
+        "id": "gk-5",
+        "competitionId": "first_div",
+        "playerName": "محمد الشطناوي",
+        "teamName": "العربي",
+        "teamColor": "#16A34A",
+        "matches": 9,
+        "cleanSheets": 5,
+        "goalsConceded": 6,
+        "saves": 24,
+        "teamId": "tm_qre03e",
+        "isDemo": true
+      },
+      {
+        "id": "gk-6",
+        "competitionId": "womens_league",
+        "playerName": "شيرين الشلبي",
+        "teamName": "الاتحاد للسيدات",
+        "teamColor": "#EC4899",
+        "matches": 8,
+        "cleanSheets": 6,
+        "goalsConceded": 4,
+        "saves": 22,
+        "teamId": "tm_68jaos",
+        "isDemo": true
+      }
+    ],
+    "teamsDirectory": [
+      {
+        "id": "tm-hussein",
+        "name": "الحسين إربد",
+        "shortName": "الحسين",
+        "color": "#FACC15",
+        "competitionId": "pro_league",
+        "city": "إربد",
+        "aliases": [
+          "الحسين",
+          "الحسين اربد",
+          "نادي الحسين",
+          "غزاة الشمال"
+        ]
+      },
+      {
+        "id": "tm-wehdat",
+        "name": "الوحدات",
+        "shortName": "الوحدات",
+        "color": "#10B981",
+        "competitionId": "pro_league",
+        "city": "عمّان",
+        "aliases": [
+          "نادي الوحدات",
+          "المارد الأخضر",
+          "وحدات"
+        ]
+      },
+      {
+        "id": "tm-faisaly",
+        "name": "الفيصلي",
+        "shortName": "الفيصلي",
+        "color": "#0EA5E9",
+        "competitionId": "pro_league",
+        "city": "عمّان",
+        "aliases": [
+          "نادي الفيصلي",
+          "الزعيم",
+          "فيصلي"
+        ]
+      },
+      {
+        "id": "tm-ramtha",
+        "name": "الرمثا",
+        "shortName": "الرمثا",
+        "color": "#1E40AF",
+        "competitionId": "pro_league",
+        "city": "الرمثا",
+        "aliases": [
+          "نادي الرمثا",
+          "غزلان الشمال",
+          "رمثا"
+        ]
+      },
+      {
+        "id": "tm-salt",
+        "name": "السلط",
+        "shortName": "السلط",
+        "color": "#1E3A8A",
+        "competitionId": "pro_league",
+        "city": "السلط",
+        "aliases": [
+          "نادي السلط",
+          "الرهيب"
+        ]
+      },
+      {
+        "id": "tm-shabab-jo",
+        "name": "شباب الأردن",
+        "shortName": "شباب الأردن",
+        "color": "#DC2626",
+        "competitionId": "pro_league",
+        "city": "عمّان",
+        "aliases": [
+          "شباب الاردن",
+          "أسود غمدان"
+        ]
+      },
+      {
+        "id": "tm-ahli",
+        "name": "الأهلي",
+        "shortName": "الأهلي",
+        "color": "#16A34A",
+        "competitionId": "pro_league",
+        "city": "عمّان",
+        "aliases": [
+          "الاهلي",
+          "نادي الأهلي",
+          "الليث الأبيض"
+        ]
+      },
+      {
+        "id": "tm-jazeera",
+        "name": "الجزيرة",
+        "shortName": "الجزيرة",
+        "color": "#EF4444",
+        "competitionId": "pro_league",
+        "city": "عمّان",
+        "aliases": [
+          "نادي الجزيرة",
+          "الشياطين الحمر"
+        ]
+      },
+      {
+        "id": "tm-aqaba",
+        "name": "شباب العقبة",
+        "shortName": "العقبة",
+        "color": "#0284C7",
+        "competitionId": "pro_league",
+        "city": "العقبة",
+        "aliases": [
+          "العقبة",
+          "نادي شباب العقبة"
+        ]
+      },
+      {
+        "id": "tm-maan",
+        "name": "معان",
+        "shortName": "معان",
+        "color": "#B45309",
+        "competitionId": "pro_league",
+        "city": "معان",
+        "aliases": [
+          "نادي معان",
+          "ذئاب الجنوب"
+        ]
+      },
+      {
+        "id": "tm-sareeh",
+        "name": "الصريح",
+        "shortName": "الصريح",
+        "color": "#EA580C",
+        "competitionId": "pro_league",
+        "city": "إربد",
+        "aliases": [
+          "نادي الصريح"
+        ]
+      },
+      {
+        "id": "tm-moghayer",
+        "name": "مغير السرحان",
+        "shortName": "مغير السرحان",
+        "color": "#475569",
+        "competitionId": "pro_league",
+        "city": "المفرق",
+        "aliases": [
+          "نادي مغير السرحان",
+          "المغير"
+        ]
+      },
+      {
+        "id": "tm-arabi",
+        "name": "العربي",
+        "shortName": "العربي",
+        "color": "#16A34A",
+        "competitionId": "first_div",
+        "city": "إربد",
+        "aliases": [
+          "النادي العربي",
+          "عربي إربد"
+        ]
+      },
+      {
+        "id": "tm-baqaa",
+        "name": "البقعة",
+        "shortName": "البقعة",
+        "color": "#111827",
+        "competitionId": "first_div",
+        "city": "البقعة",
+        "aliases": [
+          "نادي البقعة"
+        ]
+      },
+      {
+        "id": "tm-sahab",
+        "name": "سحاب",
+        "shortName": "سحاب",
+        "color": "#2563EB",
+        "competitionId": "first_div",
+        "city": "سحاب",
+        "aliases": [
+          "نادي سحاب",
+          "أسود الشرق"
+        ]
+      },
+      {
+        "id": "tm-ittihad-ramtha",
+        "name": "اتحاد الرمثا",
+        "shortName": "اتحاد الرمثا",
+        "color": "#F59E0B",
+        "competitionId": "first_div",
+        "city": "الرمثا",
+        "aliases": [
+          "إتحاد الرمثا"
+        ]
+      },
+      {
+        "id": "tm-kufrsoum",
+        "name": "كفرسوم",
+        "shortName": "كفرسوم",
+        "color": "#7C3AED",
+        "competitionId": "first_div",
+        "city": "إربد",
+        "aliases": [
+          "نادي كفرسوم"
+        ]
+      },
+      {
+        "id": "tm-jalil",
+        "name": "الجليل",
+        "shortName": "الجليل",
+        "color": "#DC2626",
+        "competitionId": "first_div",
+        "city": "إربد",
+        "aliases": [
+          "نادي الجليل"
+        ]
+      },
+      {
+        "id": "tm-yarmouk",
+        "name": "اليرموك",
+        "shortName": "اليرموك",
+        "color": "#059669",
+        "competitionId": "first_div",
+        "city": "عمّان",
+        "aliases": [
+          "نادي اليرموك"
+        ]
+      },
+      {
+        "id": "tm-karmel",
+        "name": "الكرمل",
+        "shortName": "الكرمل",
+        "color": "#16A34A",
+        "competitionId": "second_div",
+        "city": "إربد",
+        "aliases": [
+          "نادي الكرمل"
+        ]
+      },
+      {
+        "id": "tm-turra",
+        "name": "الطرة",
+        "shortName": "الطرة",
+        "color": "#2563EB",
+        "competitionId": "second_div",
+        "city": "الرمثا",
+        "aliases": [
+          "نادي الطرة"
+        ]
+      },
+      {
+        "id": "tm-doqara",
+        "name": "دوقرة",
+        "shortName": "دوقرة",
+        "color": "#D97706",
+        "competitionId": "second_div",
+        "city": "إربد",
+        "aliases": [
+          "نادي دوقرة"
+        ]
+      },
+      {
+        "id": "tm-husn",
+        "name": "الحصن",
+        "shortName": "الحصن",
+        "color": "#9333EA",
+        "competitionId": "second_div",
+        "city": "إربد",
+        "aliases": [
+          "نادي الحصن"
+        ]
+      },
+      {
+        "id": "tm-jerash",
+        "name": "جرش",
+        "shortName": "جرش",
+        "color": "#0891B2",
+        "competitionId": "second_div",
+        "city": "جرش",
+        "aliases": [
+          "نادي جرش"
+        ]
+      },
+      {
+        "id": "tm-tafileh",
+        "name": "الطفيلة",
+        "shortName": "الطفيلة",
+        "color": "#E11D48",
+        "competitionId": "second_div",
+        "city": "الطفيلة",
+        "aliases": [
+          "نادي الطفيلة"
+        ]
+      },
+      {
+        "id": "tm-mafraq",
+        "name": "المفرق",
+        "shortName": "المفرق",
+        "color": "#0D9488",
+        "competitionId": "third_div",
+        "city": "المفرق",
+        "aliases": [
+          "نادي المفرق"
+        ]
+      },
+      {
+        "id": "tm-ajloun",
+        "name": "عجلون",
+        "shortName": "عجلون",
+        "color": "#15803D",
+        "competitionId": "third_div",
+        "city": "عجلون",
+        "aliases": [
+          "نادي عجلون"
+        ]
+      },
+      {
+        "id": "tm-mutah",
+        "name": "مؤتة",
+        "shortName": "مؤتة",
+        "color": "#B91C1C",
+        "competitionId": "third_div",
+        "city": "الكرك",
+        "aliases": [
+          "نادي مؤتة"
+        ]
+      },
+      {
+        "id": "tm-hashemiya",
+        "name": "الهاشمية",
+        "shortName": "الهاشمية",
+        "color": "#4338CA",
+        "competitionId": "third_div",
+        "city": "الزرقاء",
+        "aliases": [
+          "نادي الهاشمية"
+        ]
+      },
+      {
+        "id": "tm-etihad-w",
+        "name": "الاتحاد للسيدات",
+        "shortName": "الاتحاد",
+        "color": "#EC4899",
+        "competitionId": "womens_league",
+        "city": "عمّان",
+        "aliases": [
+          "نادي الاتحاد للسيدات",
+          "الاتحاد"
+        ]
+      },
+      {
+        "id": "tm-ammancfc-w",
+        "name": "عمان FC للسيدات",
+        "shortName": "عمان FC",
+        "color": "#10B981",
+        "competitionId": "womens_league",
+        "city": "عمّان",
+        "aliases": [
+          "عمان اف سي",
+          "عمان FC"
+        ]
+      },
+      {
+        "id": "tm-orthodox-w",
+        "name": "الأرثوذكسي للسيدات",
+        "shortName": "الأرثوذكسي",
+        "color": "#EF4444",
+        "competitionId": "womens_league",
+        "city": "عمّان",
+        "aliases": [
+          "الأرثوذكسي",
+          "الارثوذكسي"
+        ]
+      },
+      {
+        "id": "tm-hussein-w",
+        "name": "الحسين للسيدات",
+        "shortName": "الحسين سيدات",
+        "color": "#FACC15",
+        "competitionId": "womens_league",
+        "city": "إربد",
+        "aliases": [
+          "الحسين إربد للسيدات"
+        ]
+      },
+      {
+        "id": "tm-nashama-w",
+        "name": "النصر للسيدات",
+        "shortName": "النصر",
+        "color": "#3B82F6",
+        "competitionId": "womens_league",
+        "city": "عمّان",
+        "aliases": [
+          "نادي النصر للسيدات",
+          "النصر"
+        ]
+      },
+      {
+        "id": "tm-istqlal-w",
+        "name": "الاستقلال للسيدات",
+        "shortName": "الاستقلال",
+        "color": "#8B5CF6",
+        "competitionId": "womens_league",
+        "city": "عمّان",
+        "aliases": [
+          "نادي الاستقلال للسيدات",
+          "الاستقلال"
+        ]
+      }
+    ],
+    "competitionRules": {
+      "pro_league": {
+        "competitionId": "pro_league",
+        "season": "2026 / 2027",
+        "ageCategory": "الفريق الأول",
+        "groups": [
+          "الدوري العام"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 1,
+        "continentalSpots": 2,
+        "promotionSpots": 0,
+        "relegationSpots": 4,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "first_div": {
+        "competitionId": "first_div",
+        "season": "2026 / 2027",
+        "ageCategory": "الفريق الأول",
+        "groups": [
+          "الدوري العام"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 2,
+        "relegationSpots": 2,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "second_div": {
+        "competitionId": "second_div",
+        "season": "2026 / 2027",
+        "ageCategory": "الفريق الأول",
+        "groups": [
+          "المجموعة الأولى",
+          "المجموعة الثانية"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 2,
+        "relegationSpots": 2,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "third_div": {
+        "competitionId": "third_div",
+        "season": "2026 / 2027",
+        "ageCategory": "الفريق الأول",
+        "groups": [
+          "مجموعة الشمال",
+          "مجموعة الوسط",
+          "مجموعة الجنوب"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 2,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "youth_u20": {
+        "competitionId": "youth_u20",
+        "season": "2026 / 2027",
+        "ageCategory": "تحت 20 سنة",
+        "groups": [
+          "دوري النخبة تحت 20",
+          "المجموعة الأولى",
+          "المجموعة الثانية"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "youth_u17": {
+        "competitionId": "youth_u17",
+        "season": "2026 / 2027",
+        "ageCategory": "تحت 17 سنة",
+        "groups": [
+          "دوري النخبة تحت 17",
+          "المجموعة الأولى",
+          "المجموعة الثانية"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "youth_u15": {
+        "competitionId": "youth_u15",
+        "season": "2026 / 2027",
+        "ageCategory": "تحت 15 سنة",
+        "groups": [
+          "دوري الأشبال العام",
+          "المجموعة الأولى",
+          "المجموعة الثانية"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "youth_grassroots": {
+        "competitionId": "youth_grassroots",
+        "season": "2026 / 2027",
+        "ageCategory": "تحت 13 سنة والبراعم",
+        "groups": [
+          "المجموعة الأولى",
+          "المجموعة الثانية"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "womens_league": {
+        "competitionId": "womens_league",
+        "season": "2026 / 2027",
+        "ageCategory": "سيدات - الفريق الأول",
+        "groups": [
+          "دوري المحترفات العام"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 1,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.608Z"
+      },
+      "jordan_cup": {
+        "competitionId": "jordan_cup",
+        "season": "2026 / 2027",
+        "ageCategory": "الفريق الأول",
+        "groups": [
+          "دور الـ 32",
+          "دور الـ 16",
+          "ربع النهائي",
+          "نصف النهائي",
+          "النهائي"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.609Z"
+      },
+      "national_teams": {
+        "competitionId": "national_teams",
+        "season": "2026 / 2027",
+        "ageCategory": "المنتخبات الوطنية",
+        "groups": [
+          "المجموعة الآسيوية"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.609Z"
+      },
+      "general": {
+        "competitionId": "general",
+        "season": "2026 / 2027",
+        "ageCategory": "عام",
+        "groups": [
+          "الدوري العام"
+        ],
+        "pointsWin": 3,
+        "pointsDraw": 1,
+        "pointsLoss": 0,
+        "championSpots": 0,
+        "continentalSpots": 0,
+        "promotionSpots": 0,
+        "relegationSpots": 0,
+        "tiebreakers": [
+          "head_to_head_points",
+          "head_to_head_gd",
+          "goal_difference",
+          "goals_for",
+          "wins"
+        ],
+        "updatedAt": "2026-11-19T00:15:28.609Z"
+      }
+    },
+    "importBatches": [],
+    "auditLogs": [],
+    "scorers": [
+      {
+        "id": "sc-1",
+        "competitionId": "pro_league",
+        "playerName": "محمود مرضي",
+        "teamName": "الحسين إربد",
+        "teamColor": "#EAB308",
+        "goals": 11,
+        "assists": 5,
+        "matches": 14,
+        "teamId": "tm_1nc18su",
+        "isDemo": true
+      },
+      {
+        "id": "sc-2",
+        "competitionId": "pro_league",
+        "playerName": "أحمد العرسان",
+        "teamName": "الفيصلي",
+        "teamColor": "#38BDF8",
+        "goals": 9,
+        "assists": 6,
+        "matches": 14,
+        "teamId": "tm_1sd3lfe",
+        "isDemo": true
+      },
+      {
+        "id": "sc-3",
+        "competitionId": "pro_league",
+        "playerName": "مهند سمرين",
+        "teamName": "الوحدات",
+        "teamColor": "#10B981",
+        "goals": 8,
+        "assists": 4,
+        "matches": 13,
+        "teamId": "tm_1fe63er",
+        "isDemo": true
+      },
+      {
+        "id": "sc-4",
+        "competitionId": "pro_league",
+        "playerName": "حمزة الدردور",
+        "teamName": "الرمثا",
+        "teamColor": "#2563EB",
+        "goals": 7,
+        "assists": 3,
+        "matches": 13,
+        "teamId": "tm_7sq4c2",
+        "isDemo": true
+      },
+      {
+        "id": "sc-5",
+        "competitionId": "first_div",
+        "playerName": "عمر الشطناوي",
+        "teamName": "العربي",
+        "teamColor": "#F59E0B",
+        "goals": 8,
+        "assists": 2,
+        "matches": 9,
+        "teamId": "tm_qre03e",
+        "isDemo": true
+      },
+      {
+        "id": "sc-6",
+        "competitionId": "first_div",
+        "playerName": "أحمد ذياب",
+        "teamName": "اتحاد الرمثا",
+        "teamColor": "#3B82F6",
+        "goals": 6,
+        "assists": 4,
+        "matches": 9,
+        "teamId": "tm_zv42sp",
+        "isDemo": true
+      },
+      {
+        "id": "sc-7",
+        "competitionId": "second_div",
+        "playerName": "بلال المومني",
+        "teamName": "الكرمل",
+        "teamColor": "#0EA5E9",
+        "goals": 7,
+        "assists": 2,
+        "matches": 7,
+        "teamId": "tm_7bsdnf",
+        "isDemo": true
+      },
+      {
+        "id": "sc-8",
+        "competitionId": "third_div",
+        "playerName": "سيف الخوالدة",
+        "teamName": "شباب المفرق",
+        "teamColor": "#8B5CF6",
+        "goals": 6,
+        "assists": 1,
+        "matches": 5,
+        "teamId": "tm_72p2tt",
+        "isDemo": true
+      },
+      {
+        "id": "sc-9",
+        "competitionId": "youth_u20",
+        "playerName": "إبراهيم صبرة",
+        "teamName": "الوحدات تحت 20",
+        "teamColor": "#10B981",
+        "goals": 10,
+        "assists": 3,
+        "matches": 10,
+        "teamId": "tm_kdw4xg",
+        "isDemo": true
+      },
+      {
+        "id": "sc-10",
+        "competitionId": "youth_u17",
+        "playerName": "زيد القيسي",
+        "teamName": "الفيصلي تحت 17",
+        "teamColor": "#38BDF8",
+        "goals": 9,
+        "assists": 4,
+        "matches": 8,
+        "teamId": "tm_7fzu3p",
+        "isDemo": true
+      },
+      {
+        "id": "sc-11",
+        "competitionId": "youth_u15",
+        "playerName": "كرم النعيمي",
+        "teamName": "شباب الأردن تحت 15",
+        "teamColor": "#DC2626",
+        "goals": 8,
+        "assists": 3,
+        "matches": 7,
+        "teamId": "tm_u6zkna",
+        "isDemo": true
+      },
+      {
+        "id": "sc-12",
+        "competitionId": "national_teams",
+        "playerName": "يزن النعيمات",
+        "teamName": "النشامى",
+        "teamColor": "#E11D48",
+        "goals": 5,
+        "assists": 2,
+        "matches": 6,
+        "teamId": "tm_iha1o2",
+        "isDemo": true
+      },
+      {
+        "id": "sc-13",
+        "competitionId": "national_teams",
+        "playerName": "موسى التعمري",
+        "teamName": "النشامى",
+        "teamColor": "#E11D48",
+        "goals": 4,
+        "assists": 4,
+        "matches": 6,
+        "teamId": "tm_iha1o2",
+        "isDemo": true
+      }
+    ],
+    "cards": [
+      {
+        "id": "card-1",
+        "type": "player_spotlight",
+        "kicker": "نجم الجولة • وتين سبورت",
+        "title": "محمود مرضي يقود إيقاع المتصدر",
+        "subtitle": "أرقام استثنائية في دوري المحترفين الأردني",
+        "competitionId": "pro_league",
+        "imageUrl": "./images/match-action.jpg",
+        "accent": "emerald",
+        "metrics": [
+          {
+            "label": "الأهداف",
+            "value": "11",
+            "highlight": true
+          },
+          {
+            "label": "التمريرات الحاسمة",
+            "value": "5"
+          },
+          {
+            "label": "التقييم الرقمي",
+            "value": "8.4",
+            "highlight": true
+          }
+        ],
+        "createdAt": "2026-11-18T21:15:28.606Z"
+      },
+      {
+        "id": "card-2",
+        "type": "matchday",
+        "kicker": "قمة الأسبوع • بتوقيت عمّان",
+        "title": "الوحدات × الرمثا",
+        "subtitle": "ستاد الملك عبدالله الثاني — القويسمة",
+        "competitionId": "pro_league",
+        "imageUrl": "./images/stadium-night.jpg",
+        "accent": "crimson",
+        "metrics": [
+          {
+            "label": "آخر 5 مواجهات",
+            "value": "3 فوز للوحدات"
+          },
+          {
+            "label": "معدل الأهداف",
+            "value": "2.8 / لقاء",
+            "highlight": true
+          },
+          {
+            "label": "البث",
+            "value": "الأردن الرياضية"
+          }
+        ],
+        "createdAt": "2026-11-18T20:15:28.606Z"
+      },
+      {
+        "id": "card-3",
+        "type": "tactical_stat",
+        "kicker": "بطاقة الدرجات والفئات",
+        "title": "أقوى خط هجوم في الأردن",
+        "subtitle": "مقارنة شاملة بين المحترفين والأولى والثانية والشباب",
+        "competitionId": "youth_u20",
+        "imageUrl": "./images/stadium-night.jpg",
+        "accent": "gold",
+        "metrics": [
+          {
+            "label": "الحسين (المحترفين)",
+            "value": "31 هدفاً",
+            "highlight": true
+          },
+          {
+            "label": "الوحدات (تحت 20)",
+            "value": "26 هدفاً"
+          },
+          {
+            "label": "الكرمل (الثانية)",
+            "value": "17 هدفاً"
+          }
+        ],
+        "createdAt": "2026-11-18T15:15:28.606Z"
+      }
+    ],
+    "liveStreams": [
+      {
+        "id": "stream-demo-1",
+        "title": "استوديو وتين سبورت التحليلي المباشر — قمة دوري المحترفين",
+        "subtitle": "بث مباشر وتحليل فني لحظي — استبدل الرابط من لوحة التحكم بأي رابط يوتيوب أو فيسبوك بثوانٍ",
+        "url": "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+        "platform": "youtube",
+        "competitionId": "pro_league",
+        "isLive": false,
+        "createdAt": "2026-11-18T23:15:28.606Z"
+      }
+    ],
+    "notifications": [
+      {
+        "id": "not-1",
+        "title": "خبر عاجل — دوري المحترفين ⚽",
+        "body": "الحسين إربد يتقدم 2-1 على الفيصلي في قمة الأسبوع 14 على ستاد الحسن!",
+        "type": "breaking",
+        "competitionId": "pro_league",
+        "createdAt": "2026-11-18T23:51:28.606Z",
+        "sentViaCloud": false
+      },
+      {
+        "id": "not-2",
+        "title": "تحديث معسكر النشامى 🇯🇴",
+        "body": "تقرير طبي يطمئن الجماهير الأردنية حول جاهزية جميع اللاعبين قبل المواجهة القادمة.",
+        "type": "announcement",
+        "competitionId": "national_teams",
+        "createdAt": "2026-11-18T22:15:28.606Z",
+        "sentViaCloud": false
+      }
+    ],
+    "schemaVersion": 2,
+    "reviewQueueArticles": [],
+    "newsSources": [
+      {
+        "id": "src-jfa-official",
+        "name": "الاتحاد الأردني لكرة القدم (JFA)",
+        "region": "jordan",
+        "method": "rss",
+        "url": "https://www.jfa.jo/rss",
+        "trustedForAutoPublish": true,
+        "enabled": true,
+        "pollIntervalMinutes": 30,
+        "lastStatus": "idle"
+      },
+      {
+        "id": "src-petra-sports",
+        "name": "وكالة الأنباء الأردنية (بترا) — الرياضة",
+        "region": "jordan",
+        "method": "rss",
+        "url": "https://petra.gov.jo/Include/InnerPage.jsp?ID=sports&lang=ar&name=rss",
+        "trustedForAutoPublish": true,
+        "enabled": true,
+        "pollIntervalMinutes": 30,
+        "lastStatus": "idle"
+      },
+      {
+        "id": "src-alghad-sports",
+        "name": "صحيفة الغد الأردنية — القسم الرياضي",
+        "region": "jordan",
+        "method": "rss",
+        "url": "https://alghad.com/section/%d8%b1%d9%8a%d8%a7%d8%b6%d8%a9/feed/",
+        "trustedForAutoPublish": false,
+        "enabled": true,
+        "pollIntervalMinutes": 45,
+        "lastStatus": "idle"
+      },
+      {
+        "id": "src-alrai-sports",
+        "name": "صحيفة الرأي الأردنية — الرياضة",
+        "region": "jordan",
+        "method": "rss",
+        "url": "https://alrai.com/rss/sports",
+        "trustedForAutoPublish": false,
+        "enabled": true,
+        "pollIntervalMinutes": 45,
+        "lastStatus": "idle"
+      },
+      {
+        "id": "src-kooora-arab",
+        "name": "مصادر البطولات العربية والاتحاد العربي",
+        "region": "arab",
+        "method": "rss",
+        "url": "https://www.uafaac.com/feed/",
+        "trustedForAutoPublish": false,
+        "enabled": true,
+        "pollIntervalMinutes": 60,
+        "lastStatus": "idle"
+      },
+      {
+        "id": "src-fifa-global",
+        "name": "الاتحاد الدولي والآسيوي (AFC / FIFA)",
+        "region": "global",
+        "method": "rss",
+        "url": "https://www.the-afc.com/en/rss.xml",
+        "trustedForAutoPublish": false,
+        "enabled": true,
+        "pollIntervalMinutes": 60,
+        "lastStatus": "idle"
+      }
+    ],
+    "standingsHistory": [],
+    "injuries": [],
+    "automationSettings": {
+      "aiProvider": "openai",
+      "aiModel": "gpt-4o-mini",
+      "autoPublishEnabled": false,
+      "allowedAutoPublishTags": [
+        "official",
+        "match_report",
+        "club_news"
+      ],
+      "newsPollIntervalMinutes": 30,
+      "matchesPollIntervalMinutes": 15,
+      "monthlyBudgetUsd": 10,
+      "dailyRequestsLimit": 120,
+      "dailyRequestsUsed": 0,
+      "monthlySpentEstimateUsd": 0,
+      "pauseOnBudgetExceeded": true
+    },
+    "customCompetitions": []
+  }
+}
