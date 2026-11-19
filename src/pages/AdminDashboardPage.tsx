@@ -11,6 +11,7 @@ import {
   Radio,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   Table2,
 } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
@@ -24,6 +25,7 @@ import { AdminCloudSettings } from './admin/AdminCloudSettings';
 import { AdminSmartImportCenter } from './admin/AdminSmartImportCenter';
 import { AdminAutoDesignStudio } from './admin/AdminAutoDesignStudio';
 import { AdminNewsSourcesAndQueue } from './admin/AdminNewsSourcesAndQueue';
+import { AdminPlayersInjuriesManager } from './admin/AdminPlayersInjuriesManager';
 import { isLiveMatchStatus } from '../utils/matchStatus';
 
 type AdminTab =
@@ -33,6 +35,7 @@ type AdminTab =
   | 'live'
   | 'matches'
   | 'standings'
+  | 'players_medical'
   | 'auto_design'
   | 'media_push'
   | 'cloud';
@@ -82,6 +85,7 @@ export const AdminDashboardPage: React.FC = () => {
     },
     { id: 'matches', label: 'المباريات والنتائج', icon: Calendar },
     { id: 'standings', label: 'الترتيب والهدافون', icon: Table2 },
+    { id: 'players_medical', label: 'اللاعبون والإصابات', icon: Stethoscope },
     { id: 'auto_design', label: 'التصميم التلقائي', icon: Palette },
     { id: 'media_push', label: 'البنرات والإشعارات', icon: BellRing },
     { id: 'cloud', label: 'السحابة والأمان', icon: Cloud },
@@ -177,6 +181,7 @@ export const AdminDashboardPage: React.FC = () => {
         {tab === 'live' && <AdminLiveStreamManager />}
         {tab === 'matches' && <AdminMatchesManager />}
         {tab === 'standings' && <AdminStandingsManager />}
+        {tab === 'players_medical' && <AdminPlayersInjuriesManager />}
         {tab === 'auto_design' && <AdminAutoDesignStudio />}
         {tab === 'media_push' && <AdminMediaAndPushManager />}
         {tab === 'cloud' && <AdminCloudSettings />}

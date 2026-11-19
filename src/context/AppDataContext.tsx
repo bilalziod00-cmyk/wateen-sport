@@ -10,6 +10,7 @@ import {
   GoalkeeperStat,
   HeroBanner,
   ImportRevisionEntry,
+  InjuryReportItem,
   LiveStreamItem,
   MatchEvent,
   MatchItem,
@@ -85,6 +86,7 @@ import {
   createStandingsHistoryEntry,
   validateManualStandingAdjustment,
 } from '../services/matchIntelligenceService';
+import { validateAndBuildInjuryReport } from '../services/playersAndMedicalService';
 import {
   generateDeterministicGoalkeeperId,
   generateDeterministicMatchId,
@@ -151,6 +153,11 @@ interface AppDataContextValue {
   deleteScorer: (id: string) => Promise<void>;
   saveGoalkeeper: (gk: GoalkeeperStat) => Promise<void>;
   deleteGoalkeeper: (id: string) => Promise<void>;
+  saveInjuryReport: (
+    report: Omit<InjuryReportItem, 'id' | 'lastUpdatedAt'> & { id?: string }
+  ) => Promise<boolean>;
+  deleteInjuryReport: (id: string) => Promise<void>;
+  updateTeamDirectoryItem: (team: TeamDirectoryItem) => Promise<void>;
   saveCompetitionRule: (rule: CompetitionRuleConfig) => Promise<void>;
   saveCustomCompetition: (comp: CustomCompetitionItem) => Promise<void>;
   deleteCustomCompetition: (id: string) => Promise<void>;
@@ -1052,6 +1059,74 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         goalkeepers: (prev.goalkeepers || []).filter((g) => g.id !== id),
       }));
       showToast('تم حذف حارس المرمى من القائمة', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  // القسم الطبي الإخباري (الإصابات والجاهزية — يتطلب مصدراً موثقاً)
+  const saveInjuryReport = useCallback(
+    async (
+      report: Omit<InjuryReportItem, 'id' | 'lastUpdatedAt'> & { id?: string }
+    ): Promise<boolean> => {
+      if (!isAdminUnlocked) {
+        showToast('غير مصرح: يجب فتح قفل لوحة الإدارة أولاً', 'crimson');
+        return false;
+      }
+      const checked = validateAndBuildInjuryReport(report);
+      if (!checked.ok) {
+        showToast(checked.error, 'crimson');
+        return false;
+      }
+
+      await commitState((prev) => {
+        const list = prev.injuries || [];
+        const exists = list.some((x) => x.id === checked.record.id);
+        const injuries = exists
+          ? list.map((x) => (x.id === checked.record.id ? checked.record : x))
+          : [checked.record, ...list];
+        const auditEntry: ImportRevisionEntry = {
+          id: `aud-inj-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actor: 'مدير النظام',
+          action: exists ? 'UPDATE_INJURY_REPORT' : 'CREATE_INJURY_REPORT',
+          details: `تقرير طبي (${checked.record.playerName} - ${checked.record.teamName}): ${checked.record.declaredInjury} [المصدر: ${checked.record.sourceName}]`,
+        };
+        return {
+          ...prev,
+          injuries,
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+        };
+      });
+      showToast('تم حفظ التقرير الطبي الموثق في قسم الإصابات والجاهزية', 'emerald');
+      return true;
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const deleteInjuryReport = useCallback(
+    async (id: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        injuries: (prev.injuries || []).filter((x) => x.id !== id),
+      }));
+      showToast('تم حذف سجل الإصابة من القسم الطبي', 'amber');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const updateTeamDirectoryItem = useCallback(
+    async (team: TeamDirectoryItem) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => {
+        const dir = prev.teamsDirectory || INITIAL_JORDAN_TEAMS_DIRECTORY;
+        const exists = dir.some((t) => t.id === team.id);
+        const teamsDirectory = exists
+          ? dir.map((t) => (t.id === team.id ? team : t))
+          : [team, ...dir];
+        return { ...prev, teamsDirectory };
+      });
+      showToast(`تم تحديث بطاقة النادي "${team.name}" بنجاح`, 'emerald');
     },
     [commitState, isAdminUnlocked, showToast]
   );
@@ -2316,6 +2391,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteScorer,
         saveGoalkeeper,
         deleteGoalkeeper,
+        saveInjuryReport,
+        deleteInjuryReport,
+        updateTeamDirectoryItem,
         saveCompetitionRule,
         saveCustomCompetition,
         deleteCustomCompetition,

@@ -335,6 +335,8 @@ export interface TeamDirectoryItem {
   groupName?: string;
   city?: string;
   stadium?: string;
+  coachName?: string;
+  foundedYear?: string;
   aliases: string[];
 }
 
@@ -589,4 +591,4 @@ export interface AppDataState {
   updatedAt: string;
 }
 
-export type NavTab = 'home' | 'competitions' | 'results' | 'admin';
+export type NavTab = 'home' | 'competitions' | 'results' | 'clubs_medical' | 'admin';

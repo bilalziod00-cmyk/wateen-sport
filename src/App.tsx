@@ -7,12 +7,14 @@ import {
   ShieldCheck,
   Table2,
   Trophy,
+  Users,
 } from 'lucide-react';
 import { AppDataProvider, useAppData } from './context/AppDataContext';
 import { CompetitionId, MatchItem, NavTab, NewsArticle } from './types/sports';
 import { HomePage } from './pages/HomePage';
 import { CompetitionsPage } from './pages/CompetitionsPage';
 import { ResultsStandingsPage } from './pages/ResultsStandingsPage';
+import { PlayersAndTeamsPage } from './pages/PlayersAndTeamsPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { ArticleDetailModal } from './pages/ArticleDetailModal';
 import { MatchDetailModal } from './pages/MatchDetailModal';
@@ -56,8 +58,9 @@ const WateenShell: React.FC = () => {
   const navItems: { id: NavTab; label: string; icon: React.ElementType; badge?: number }[] = [
     { id: 'home', label: 'الرئيسية', icon: Home },
     { id: 'competitions', label: 'البطولات', icon: Trophy },
-    { id: 'results', label: 'النتائج والترتيب', icon: Table2, badge: liveMatchesCount },
-    { id: 'admin', label: 'لوحة التحكم', icon: ShieldCheck },
+    { id: 'results', label: 'النتائج', icon: Table2, badge: liveMatchesCount },
+    { id: 'clubs_medical', label: 'اللاعبون والطب', icon: Users },
+    { id: 'admin', label: 'الإدارة', icon: ShieldCheck },
   ];
 
   return (
@@ -163,6 +166,10 @@ const WateenShell: React.FC = () => {
           <ResultsStandingsPage onSelectMatch={(match) => setSelectedMatchId(match.id)} />
         )}
 
+        {activeTab === 'clubs_medical' && (
+          <PlayersAndTeamsPage onSelectMatch={(match) => setSelectedMatchId(match.id)} />
+        )}
+
         {activeTab === 'admin' && <AdminDashboardPage />}
       </main>
 
@@ -171,7 +178,7 @@ const WateenShell: React.FC = () => {
         aria-label="التنقل الرئيسي"
         className="fixed bottom-0 inset-x-0 z-30 bg-[#0A1019]/95 backdrop-blur-xl border-t border-white/10 safe-bottom"
       >
-        <div className="max-w-4xl mx-auto px-2 py-1.5 grid grid-cols-4 gap-1">
+        <div className="max-w-4xl mx-auto px-1.5 py-1.5 grid grid-cols-5 gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeTab === item.id;
