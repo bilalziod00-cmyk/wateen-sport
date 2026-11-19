@@ -10,6 +10,12 @@ dist/
 .env
 .env.local
 .env.*.local
+firebase/functions/.env
+firebase/functions/.env.*
+!firebase/functions/.env.example
+*serviceAccount*.json
+.firebase/
+firebase-debug*.log
 android/app/google-services.json
 *.keystore
 *.jks

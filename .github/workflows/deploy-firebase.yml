@@ -1,0 +1,58 @@
+name: Deploy Wateen Firebase Backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'ما الذي تريد نشره على Firebase؟'
+        required: true
+        default: 'firestore,storage,functions'
+        type: choice
+        options:
+          - 'firestore,storage'
+          - 'firestore,storage,functions'
+          - 'functions'
+
+jobs:
+  deploy-firebase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Cloud Functions dependencies
+        if: contains(inputs.target, 'functions')
+        working-directory: firebase/functions
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Prepare Server AI Environment File (Secret stays server-only)
+        if: contains(inputs.target, 'functions')
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          : > firebase/functions/.env
+          if [ -n "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> firebase/functions/.env
+          fi
+          if [ -n "$GEMINI_API_KEY" ]; then
+            echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> firebase/functions/.env
+          fi
+
+      - name: Install Firebase CLI and Deploy
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_WATEEN_SPORT }}
+        run: |
+          if [ -z "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
+            echo "Missing Secret: FIREBASE_SERVICE_ACCOUNT_WATEEN_SPORT"
+            exit 1
+          fi
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/firebase-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+          npx --yes firebase-tools deploy --only "${{ inputs.target }}" --project wateen-sport-app --non-interactive
+          rm -f /tmp/firebase-sa.json firebase/functions/.env
