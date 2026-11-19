@@ -8,6 +8,7 @@ import {
   Table2,
   Trophy,
   Users,
+  WifiOff,
 } from 'lucide-react';
 import { AppDataProvider, useAppData } from './context/AppDataContext';
 import { CompetitionId, MatchItem, NavTab, NewsArticle } from './types/sports';
@@ -21,16 +22,29 @@ import { MatchDetailModal } from './pages/MatchDetailModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { CinematicSplashScreen } from './components/CinematicSplashScreen';
 import { isLiveMatchStatus } from './utils/matchStatus';
+import { evaluateDataFreshnessStatus } from './services/automationAndCacheService';
+import { formatAmmanDateTime } from './utils/ammanTime';
 
 const WateenShell: React.FC = () => {
   const {
     data,
+    isOnline,
     cloudConnectionState,
     toast,
     unreadNotificationsCount,
     markNotificationsRead,
     isAdminUnlocked,
   } = useAppData();
+
+  const enabledSources = (data.newsSources || []).filter((s) => s.enabled);
+  const failedSourcesCount = enabledSources.filter((s) => s.lastStatus === 'error').length;
+  const freshness = evaluateDataFreshnessStatus({
+    isOnline,
+    lastUpdatedAt: data.updatedAt,
+    lastSyncSuccessAt: data.lastSyncSuccessAt,
+    failedSourcesCount,
+    totalEnabledSources: enabledSources.length,
+  });
 
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [showSplash, setShowSplash] = useState<boolean>(true);
@@ -99,10 +113,12 @@ const WateenShell: React.FC = () => {
           </button>
 
           <div className="flex items-center gap-2">
-            {/* مؤشر المزامنة السحابية الرسمي (محلي / جاري الاتصال / متصل بالسحابة / فشل الاتصال) */}
+            {/* مؤشر الشبكة والمزامنة السحابية */}
             <span
               className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${
-                cloudConnectionState === 'connected'
+                !isOnline
+                  ? 'bg-amber-500/20 border-amber-400/50 text-amber-200'
+                  : cloudConnectionState === 'connected'
                   ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300'
                   : cloudConnectionState === 'connecting'
                   ? 'bg-sky-500/15 border-sky-500/35 text-sky-300 animate-pulse'
@@ -111,8 +127,10 @@ const WateenShell: React.FC = () => {
                   : 'bg-amber-500/15 border-amber-500/35 text-amber-300'
               }`}
             >
-              <Cloud className="w-3 h-3" />
-              {cloudConnectionState === 'connected'
+              {!isOnline ? <WifiOff className="w-3 h-3" /> : <Cloud className="w-3 h-3" />}
+              {!isOnline
+                ? 'غير متصل'
+                : cloudConnectionState === 'connected'
                 ? 'متصل بالسحابة'
                 : cloudConnectionState === 'connecting'
                 ? 'جاري الاتصال'
@@ -144,6 +162,27 @@ const WateenShell: React.FC = () => {
 
       {/* المحتوى الرئيسي */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-3.5 sm:px-5 pt-4 pb-24">
+        {(freshness.mode === 'offline' ||
+          freshness.mode === 'stale' ||
+          (freshness.mode === 'source_error' && isAdminUnlocked)) && (
+          <div
+            role="status"
+            className={`mb-4 rounded-2xl border px-3.5 py-2.5 flex items-start gap-2.5 text-xs ${
+              freshness.mode === 'source_error'
+                ? 'bg-rose-500/12 border-rose-500/35 text-rose-200'
+                : 'bg-amber-500/12 border-amber-500/35 text-amber-200'
+            }`}
+          >
+            <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div className="font-black">{freshness.titleAr}</div>
+              <p className="text-[11px] opacity-90 leading-relaxed">
+                {freshness.messageAr} (آخر حفظ:{' '}
+                {formatAmmanDateTime(freshness.lastUpdatedIso)})
+              </p>
+            </div>
+          </div>
+        )}
         {activeTab === 'home' && (
           <HomePage
             onSelectArticle={(art) => setSelectedArticleId(art.id)}

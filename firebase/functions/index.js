@@ -1,8 +1,10 @@
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const { rewriteAndVerifySportsNews } = require('./wateenAiCore');
 const { collectAndProcessNewsBatch } = require('./newsCollector');
+const { executeScheduledWateenCycle } = require('./scheduledAutomation');
 
 admin.initializeApp();
 
@@ -191,3 +193,66 @@ exports.rewriteNewsWithWateenAi = onCall(async (request) => {
   const out = await rewriteAndVerifySportsNews({ rawItem, source, settings, existingArticles: [] });
   return { ok: true, ...out };
 });
+
+/**
+ * 5) المجدول الخلفي التلقائي (Cloud Scheduler) كل 30 دقيقة بتوقيت عمّان
+ * يتحقق من الميزانية والكاش وإعادة المحاولة دون اختلاق أي بيانات أو تسريب مفاتيح API
+ */
+exports.runScheduledWateenAutomation = onSchedule(
+  {
+    schedule: 'every 30 minutes',
+    timeZone: 'Asia/Amman',
+    retryCount: 1,
+  },
+  async () => {
+    const db = admin.firestore();
+    const [sourcesSnap, newsSnap, queueSnap, settingsSnap] = await Promise.all([
+      db.collection('news_sources').get(),
+      db.collection('news').orderBy('publishedAt', 'desc').limit(150).get().catch(() => ({ docs: [] })),
+      db.collection('review_queue').limit(150).get().catch(() => ({ docs: [] })),
+      db.collection('app_settings').doc('automation').get().catch(() => null),
+    ]);
+
+    const sources = sourcesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const existingArticles = [
+      ...newsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      ...queueSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    ];
+    const settings = settingsSnap && settingsSnap.exists ? settingsSnap.data() : {};
+
+    const cycle = await executeScheduledWateenCycle({
+      sources,
+      existingArticles,
+      settings,
+      maxItemsPerSource: 6,
+    });
+
+    const batch = db.batch();
+    for (const art of cycle.published) {
+      batch.set(db.collection('news').doc(art.id), art, { merge: true });
+    }
+    for (const art of cycle.queued) {
+      batch.set(db.collection('review_queue').doc(art.id), art, { merge: true });
+    }
+    for (const upd of cycle.sourceUpdates) {
+      batch.set(db.collection('news_sources').doc(upd.id), upd, { merge: true });
+    }
+    for (const alert of cycle.alerts) {
+      batch.set(db.collection('ai_tasks').doc(alert.id), alert, { merge: true });
+    }
+    batch.set(db.collection('app_settings').doc('automation'), cycle.updatedSettings, { merge: true });
+    await batch.commit();
+
+    await db.collection('audit_logs').add({
+      actorUid: 'wateen_scheduler',
+      action: 'SCHEDULED_AUTOMATION_CYCLE',
+      ok: cycle.ok,
+      pausedByBudget: cycle.pausedByBudget,
+      publishedCount: cycle.published.length,
+      queuedCount: cycle.queued.length,
+      cacheHits: cycle.stats.cacheHits,
+      alertsCount: cycle.alerts.length,
+      timestamp: new Date().toISOString(),
+    });
+  }
+);

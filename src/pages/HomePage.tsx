@@ -43,7 +43,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onOpenCompetition,
   onJumpToResults,
 }) => {
-  const { data } = useAppData();
+  const { data, isOnline } = useAppData();
   const [bannerIndex, setBannerIndex] = useState(0);
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [query, setQuery] = useState('');
@@ -270,6 +270,11 @@ export const HomePage: React.FC<HomePageProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-5 rounded-full bg-emerald-400" />
             <h2 className="text-base font-black text-white">أبرز المباريات • بتوقيت عمّان</h2>
+            {!isOnline && (
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-200">
+                كاش محلي (دون اتصال)
+              </span>
+            )}
           </div>
           <button
             type="button"

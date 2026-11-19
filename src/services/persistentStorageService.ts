@@ -250,6 +250,11 @@ export function mergeStatesWithoutDuplication(
       50
     ),
     automationSettings: cloudState.automationSettings || localState.automationSettings,
+    automationAlerts: mergeById(
+      localState.automationAlerts || [],
+      cloudState.automationAlerts || []
+    ).slice(0, 80),
+    lastSyncSuccessAt: cloudState.lastSyncSuccessAt || localState.lastSyncSuccessAt,
     updatedAt: new Date().toISOString(),
   };
 }

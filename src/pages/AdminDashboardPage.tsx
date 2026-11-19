@@ -4,6 +4,7 @@ import {
   Bot,
   Calendar,
   Cloud,
+  Cpu,
   Flame,
   Lock,
   MessageSquareText,
@@ -28,11 +29,13 @@ import { AdminAutoDesignStudio } from './admin/AdminAutoDesignStudio';
 import { AdminNewsSourcesAndQueue } from './admin/AdminNewsSourcesAndQueue';
 import { AdminPlayersInjuriesManager } from './admin/AdminPlayersInjuriesManager';
 import { AdminAiAssistantPage } from './admin/AdminAiAssistantPage';
+import { AdminAutomationAndBudget } from './admin/AdminAutomationAndBudget';
 import { isLiveMatchStatus } from '../utils/matchStatus';
 
 type AdminTab =
   | 'smart_import'
   | 'news_intel'
+  | 'automation_budget'
   | 'ai_assistant'
   | 'news'
   | 'live'
@@ -67,6 +70,7 @@ export const AdminDashboardPage: React.FC = () => {
     (b) => b.status === 'Pending Review' || b.status === 'Needs Correction'
   ).length;
   const reviewQueueCount = (data.reviewQueueArticles || []).length;
+  const activeAlertsCount = (data.automationAlerts || []).filter((a) => !a.resolved).length;
 
   const tabs: { id: AdminTab; label: string; icon: React.ElementType; highlight?: boolean }[] = [
     {
@@ -78,6 +82,12 @@ export const AdminDashboardPage: React.FC = () => {
       id: 'news_intel',
       label: `الذكاء الإخباري${reviewQueueCount ? ` (${reviewQueueCount})` : ''}`,
       icon: Bot,
+    },
+    {
+      id: 'automation_budget',
+      label: `الأتمتة والميزانية${activeAlertsCount ? ` (${activeAlertsCount})` : ''}`,
+      icon: Cpu,
+      highlight: activeAlertsCount > 0,
     },
     { id: 'ai_assistant', label: 'المساعد الذكي AI', icon: MessageSquareText },
     { id: 'news', label: 'الأخبار والتحرير', icon: Newspaper },
@@ -181,6 +191,7 @@ export const AdminDashboardPage: React.FC = () => {
       <div>
         {tab === 'smart_import' && <AdminSmartImportCenter />}
         {tab === 'news_intel' && <AdminNewsSourcesAndQueue />}
+        {tab === 'automation_budget' && <AdminAutomationAndBudget />}
         {tab === 'ai_assistant' && <AdminAiAssistantPage />}
         {tab === 'news' && <AdminNewsManager />}
         {tab === 'live' && <AdminLiveStreamManager />}

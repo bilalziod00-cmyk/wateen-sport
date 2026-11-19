@@ -12,6 +12,7 @@ import { generateDeterministicTeamId } from '../utils/deterministicIds';
 export const CURRENT_SCHEMA_VERSION = 2;
 
 export function getDefaultAutomationSettings(): WateenAutomationSettings {
+  const nowIso = new Date().toISOString();
   return {
     aiProvider: 'openai',
     aiModel: 'gpt-4o-mini',
@@ -24,6 +25,13 @@ export function getDefaultAutomationSettings(): WateenAutomationSettings {
     dailyRequestsUsed: 0,
     monthlySpentEstimateUsd: 0,
     pauseOnBudgetExceeded: true,
+    automationEnabled: true,
+    cacheTtlMinutes: 20,
+    maxRetryAttempts: 2,
+    lastBudgetResetDate: nowIso.slice(0, 10),
+    lastMonthlyResetMonth: nowIso.slice(0, 7),
+    totalCacheHits: 0,
+    sourceCacheHashes: {},
   };
 }
 
@@ -230,6 +238,8 @@ export function migrateAppStateSafely(
     automationSettings: rawInput.automationSettings
       ? { ...getDefaultAutomationSettings(), ...rawInput.automationSettings }
       : getDefaultAutomationSettings(),
+    automationAlerts: Array.isArray(rawInput.automationAlerts) ? rawInput.automationAlerts.slice(0, 80) : [],
+    lastSyncSuccessAt: rawInput.lastSyncSuccessAt,
     liveStreams: Array.isArray(rawInput.liveStreams)
       ? rawInput.liveStreams
       : fallbackSeed.liveStreams,

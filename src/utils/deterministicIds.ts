@@ -20,7 +20,7 @@ function normalizeArabicKey(raw: string | undefined): string {
 /**
  * توليد بصمة ثابتة (Deterministic FNV-1a 32-bit Hash) لإنتاج معرفات دائمة لا تتغير عند إعادة الاستيراد أو تحديث التطبيق
  */
-function stableHash(input: string): string {
+export function stableHash(input: string): string {
   const str = (input || '').trim().toLowerCase();
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {

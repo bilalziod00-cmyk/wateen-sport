@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import {
   AppDataState,
   AppNotification,
+  AutomationAlertItem,
   CloudConnectionState,
   CompetitionId,
   CompetitionRuleConfig,
@@ -79,8 +80,11 @@ import {
   NewsCollectionCycleResult,
   processRawNewsItemForWateen,
   RawFetchedNewsItem,
-  runNewsIntelligenceBatch,
 } from '../services/newsIntelligenceService';
+import {
+  ClientAutomationCycleResult,
+  runBudgetAwareCollectionCycle,
+} from '../services/automationAndCacheService';
 import {
   appendMatchEventSafely,
   createStandingsHistoryEntry,
@@ -108,6 +112,7 @@ interface ToastMessage {
 
 interface AppDataContextValue {
   data: AppDataState;
+  isOnline: boolean;
   cloudMode: 'local' | 'firebase';
   cloudConnectionState: CloudConnectionState;
   cloudConfig: FirebaseCloudConfig | null;
@@ -209,7 +214,11 @@ interface AppDataContextValue {
     sourceName?: string;
     sourceTrusted?: boolean;
   }) => Promise<{ publishedCount: number; queuedCount: number; rejectedCount: number }>;
-  runNewsIntelligenceNow: () => Promise<NewsCollectionCycleResult>;
+  runNewsIntelligenceNow: (opts?: { forceBypassCache?: boolean }) => Promise<NewsCollectionCycleResult>;
+  runScheduledAutomationCycle: (opts?: { forceBypassCache?: boolean }) => Promise<ClientAutomationCycleResult>;
+  resetDailyAutomationQuota: () => Promise<void>;
+  resolveAutomationAlert: (alertId: string) => Promise<void>;
+  clearResolvedAutomationAlerts: () => Promise<void>;
   updateQueuedArticle: (article: NewsArticle) => Promise<void>;
   approveQueuedArticle: (articleId: string) => Promise<void>;
   rejectQueuedArticle: (articleId: string, reason?: string) => Promise<void>;
@@ -271,6 +280,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [firebaseUserEmail, setFirebaseUserEmail] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
   const [preMigrationBackup, setPreMigrationBackup] = useState<PreMigrationBackupSnapshot | null>(
     () => getPreMigrationBackupSnapshot()
   );
@@ -465,6 +477,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (authUnsubRef.current) authUnsubRef.current();
     };
   }, [activateFirebase]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // تفعيل الإشعارات بهدوء بعد انتهاء شاشة الافتتاح والانتقال للصفحة الرئيسية
   useEffect(() => {
@@ -2227,48 +2250,134 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [commitState, data.articles, data.automationSettings, data.newsSources, data.reviewQueueArticles, isAdminUnlocked, showToast]
   );
 
-  const runNewsIntelligenceNow = useCallback(async (): Promise<NewsCollectionCycleResult> => {
-    const sources = data.newsSources || getDefaultNewsSources();
-    const settings = data.automationSettings || getDefaultAutomationSettings();
-    const result = await runNewsIntelligenceBatch({
-      sources,
-      existingArticles: data.articles,
-      queuedArticles: data.reviewQueueArticles || [],
-      settings,
-    });
-
-    const auditEntry: ImportRevisionEntry = {
-      id: `news-run-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      actor: 'جامع الأخبار WATEEN AI',
-      action: 'NEWS_COLLECTION_CYCLE',
-      details: `دورة فحص ${result.sourceUpdates.length} مصادر: نُشر ${result.published.length}، للمراجعة ${result.queued.length}، مرفوض ${result.rejected.length}.`,
-    };
-
-    await commitState((prev) => {
-      const updatedSources = (prev.newsSources || getDefaultNewsSources()).map((src) => {
-        const upd = result.sourceUpdates.find((u) => u.id === src.id);
-        return upd ? { ...src, ...upd } : src;
+  const runScheduledAutomationCycle = useCallback(
+    async (opts?: { forceBypassCache?: boolean }): Promise<ClientAutomationCycleResult> => {
+      const sources = data.newsSources || getDefaultNewsSources();
+      const settings = data.automationSettings || getDefaultAutomationSettings();
+      const cycle = await runBudgetAwareCollectionCycle({
+        sources,
+        existingArticles: data.articles,
+        queuedArticles: data.reviewQueueArticles || [],
+        settings,
+        forceBypassCache: opts?.forceBypassCache,
+        isOnline,
       });
-      return {
-        ...prev,
-        newsSources: updatedSources,
-        articles: [...result.published, ...prev.articles],
-        reviewQueueArticles: [...result.queued, ...(prev.reviewQueueArticles || [])],
-        auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+
+      const auditEntry: ImportRevisionEntry = {
+        id: `auto-run-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        actor: 'محرك الأتمتة WATEEN AI',
+        action: cycle.pausedByBudget
+          ? 'AUTOMATION_PAUSED_BUDGET'
+          : 'AUTOMATION_SCHEDULED_CYCLE',
+        details: cycle.pausedByBudget
+          ? cycle.pausedReason || 'تم إيقاف الأتمتة لتجاوز الحد اليومي أو السقف المالي.'
+          : `فحص ${sources.filter((s) => s.enabled).length} مصادر: كاش ${cycle.cacheHits} • نُشر ${cycle.published.length} • مراجعة ${cycle.queued.length} • تنبيهات ${cycle.alerts.length}.`,
       };
-    });
 
-    const failedSources = result.sourceUpdates.filter((u) => u.lastStatus === 'error').length;
-    showToast(
-      failedSources > 0 && result.published.length === 0 && result.queued.length === 0
-        ? `تعذر الجلب المباشر من ${failedSources} مصادر من المتصفح (بسبب CORS/الشبكة) — يمكنك اللصق المباشر لخلاصة RSS أو التفعيل عبر Cloud Functions`
-        : `اكتملت دورة الأخبار: نُشر ${result.published.length} • للمراجعة ${result.queued.length} • مرفوض ${result.rejected.length}`,
-      result.published.length + result.queued.length > 0 ? 'emerald' : 'amber'
-    );
+      const hasSuccessSource = cycle.sourceUpdates.some((u) => u.lastStatus === 'ok');
 
-    return result;
-  }, [commitState, data.articles, data.automationSettings, data.newsSources, data.reviewQueueArticles, showToast]);
+      await commitState((prev) => {
+        const updatedSources = (prev.newsSources || getDefaultNewsSources()).map((src) => {
+          const upd = cycle.sourceUpdates.find((u) => u.id === src.id);
+          return upd ? { ...src, ...upd } : src;
+        });
+        const mergedAlerts: AutomationAlertItem[] = [
+          ...cycle.alerts,
+          ...(prev.automationAlerts || []),
+        ].slice(0, 80);
+
+        return {
+          ...prev,
+          newsSources: updatedSources,
+          articles: [...cycle.published, ...prev.articles],
+          reviewQueueArticles: [...cycle.queued, ...(prev.reviewQueueArticles || [])],
+          automationSettings: cycle.updatedSettings,
+          automationAlerts: mergedAlerts,
+          lastSyncSuccessAt: hasSuccessSource
+            ? new Date().toISOString()
+            : prev.lastSyncSuccessAt,
+          auditLogs: [auditEntry, ...(prev.auditLogs || [])].slice(0, 150),
+        };
+      });
+
+      if (cycle.pausedByBudget && cycle.pausedReason) {
+        showToast(cycle.pausedReason, 'crimson');
+      } else if (!isOnline) {
+        showToast('تعذر الاتصال: الجهاز غير متصل بالإنترنت — تم الحفاظ على البيانات المخزنة', 'amber');
+      } else {
+        const failedCount = cycle.sourceUpdates.filter((u) => u.lastStatus === 'error').length;
+        showToast(
+          failedCount > 0 && cycle.published.length === 0 && cycle.queued.length === 0
+            ? `تعذر الوصول إلى ${failedCount} مصادر (سُجّل تنبيه للإدارة بدون اختلاق أخبار)`
+            : `دورة الأتمتة: كاش ${cycle.cacheHits} • نُشر ${cycle.published.length} • للمراجعة ${cycle.queued.length}`,
+          cycle.published.length + cycle.queued.length + cycle.cacheHits > 0 ? 'emerald' : 'amber'
+        );
+      }
+
+      return cycle;
+    },
+    [
+      commitState,
+      data.articles,
+      data.automationSettings,
+      data.newsSources,
+      data.reviewQueueArticles,
+      isOnline,
+      showToast,
+    ]
+  );
+
+  const runNewsIntelligenceNow = useCallback(
+    async (opts?: { forceBypassCache?: boolean }): Promise<NewsCollectionCycleResult> => {
+      const cycle = await runScheduledAutomationCycle(opts);
+      return {
+        published: cycle.published,
+        queued: cycle.queued,
+        rejected: cycle.rejected,
+        sourceUpdates: cycle.sourceUpdates,
+      };
+    },
+    [runScheduledAutomationCycle]
+  );
+
+  const resetDailyAutomationQuota = useCallback(async () => {
+    if (!isAdminUnlocked) return;
+    await commitState((prev) => ({
+      ...prev,
+      automationSettings: {
+        ...getDefaultAutomationSettings(),
+        ...(prev.automationSettings || {}),
+        dailyRequestsUsed: 0,
+        lastBudgetResetDate: new Date().toISOString().slice(0, 10),
+        lastAutomationError: undefined,
+      },
+    }));
+    showToast('تم تصفير عداد الطلبات اليومي وإزالة قفل الحد اليومي', 'emerald');
+  }, [commitState, isAdminUnlocked, showToast]);
+
+  const resolveAutomationAlert = useCallback(
+    async (alertId: string) => {
+      if (!isAdminUnlocked) return;
+      await commitState((prev) => ({
+        ...prev,
+        automationAlerts: (prev.automationAlerts || []).map((a) =>
+          a.id === alertId ? { ...a, resolved: true } : a
+        ),
+      }));
+      showToast('تم تأكيد ومعالجة التنبيه', 'emerald');
+    },
+    [commitState, isAdminUnlocked, showToast]
+  );
+
+  const clearResolvedAutomationAlerts = useCallback(async () => {
+    if (!isAdminUnlocked) return;
+    await commitState((prev) => ({
+      ...prev,
+      automationAlerts: (prev.automationAlerts || []).filter((a) => !a.resolved),
+    }));
+    showToast('تم تنظيف التنبيهات المعالجة', 'amber');
+  }, [commitState, isAdminUnlocked, showToast]);
 
   const updateQueuedArticle = useCallback(
     async (article: NewsArticle) => {
@@ -2360,6 +2469,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <AppDataContext.Provider
       value={{
         data,
+        isOnline,
         cloudMode,
         cloudConnectionState,
         cloudConfig,
@@ -2434,6 +2544,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateAutomationSettings,
         ingestManualNewsOrRss,
         runNewsIntelligenceNow,
+        runScheduledAutomationCycle,
+        resetDailyAutomationQuota,
+        resolveAutomationAlert,
+        clearResolvedAutomationAlerts,
         updateQueuedArticle,
         approveQueuedArticle,
         rejectQueuedArticle,

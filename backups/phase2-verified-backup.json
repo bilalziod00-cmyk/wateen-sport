@@ -1,6 +1,6 @@
 {
-  "backupId": "bkp-1795047336361",
-  "createdAt": "2026-11-19T00:15:36.361Z",
+  "backupId": "bkp-1795047964563",
+  "createdAt": "2026-11-19T00:26:04.563Z",
   "counts": {
     "competitionsCount": 12,
     "teamsCount": 35,
@@ -11,10 +11,10 @@
     "articlesCount": 7,
     "importsCount": 0
   },
-  "checksum": "chk-417513d5",
+  "checksum": "chk-5b031a1b",
   "state": {
     "adminPin": "2026",
-    "updatedAt": "2026-11-19T00:15:36.301Z",
+    "updatedAt": "2026-11-19T00:26:04.427Z",
     "banners": [
       {
         "id": "bn-1",
@@ -64,7 +64,7 @@
         "isBreaking": true,
         "imageUrl": "./images/stadium-night.jpg",
         "author": "فريق تحرير وتين سبورت",
-        "publishedAt": "2026-11-18T23:45:36.301Z",
+        "publishedAt": "2026-11-18T23:56:04.427Z",
         "views": 4280,
         "relatedMatchId": "m-pro-1",
         "statsCard": {
@@ -103,7 +103,7 @@
         "isBreaking": true,
         "imageUrl": "./images/match-action.jpg",
         "author": "قسم المنتخبات — وتين سبورت",
-        "publishedAt": "2026-11-18T22:15:36.301Z",
+        "publishedAt": "2026-11-18T22:26:04.427Z",
         "views": 5910,
         "statsCard": {
           "title": "تقرير الجاهزية البدنية — النشامى",
@@ -140,7 +140,7 @@
         "isBreaking": false,
         "imageUrl": "./images/match-action.jpg",
         "author": "وحدة التحليل الرقمي — وتين سبورت",
-        "publishedAt": "2026-11-18T19:15:36.301Z",
+        "publishedAt": "2026-11-18T19:26:04.427Z",
         "views": 2890,
         "statsCard": {
           "title": "مؤشر الكفاءة التكتيكية",
@@ -178,7 +178,7 @@
         "isBreaking": false,
         "imageUrl": "./images/stadium-night.jpg",
         "author": "مراسل المحافظات — وتين سبورت",
-        "publishedAt": "2026-11-18T16:15:36.301Z",
+        "publishedAt": "2026-11-18T16:26:04.427Z",
         "views": 1940,
         "statsCard": {
           "title": "حراك ميركاتو الدرجة الأولى",
@@ -215,7 +215,7 @@
         "isBreaking": false,
         "imageUrl": "./images/match-action.jpg",
         "author": "قسم الفئات العمرية — وتين سبورت",
-        "publishedAt": "2026-11-18T12:15:36.301Z",
+        "publishedAt": "2026-11-18T12:26:04.427Z",
         "views": 2120,
         "statsCard": {
           "title": "حصاد الفئات العمرية الأردنية",
@@ -252,7 +252,7 @@
         "isBreaking": false,
         "imageUrl": "./images/stadium-night.jpg",
         "author": "تغطية الدرجات — وتين سبورت",
-        "publishedAt": "2026-11-18T06:15:36.301Z",
+        "publishedAt": "2026-11-18T06:26:04.427Z",
         "views": 1560,
         "isDemo": true
       },
@@ -266,7 +266,7 @@
         "isBreaking": false,
         "imageUrl": "./images/match-action.jpg",
         "author": "فريق تحرير وتين سبورت",
-        "publishedAt": "2026-11-18T00:15:36.301Z",
+        "publishedAt": "2026-11-18T00:26:04.427Z",
         "views": 2430,
         "isDemo": true
       }
@@ -286,7 +286,7 @@
         "awayScore": 1,
         "status": "live",
         "liveMinute": 74,
-        "kickoffIso": "2026-11-18T23:03:36.301Z",
+        "kickoffIso": "2026-11-18T23:14:04.427Z",
         "stadium": "ستاد الحسن - إربد",
         "referee": "أدهم مخادمة",
         "broadcast": "الأردن الرياضية",
@@ -352,7 +352,7 @@
         "homeScore": 0,
         "awayScore": 0,
         "status": "upcoming",
-        "kickoffIso": "2026-11-19T03:15:36.301Z",
+        "kickoffIso": "2026-11-19T03:26:04.427Z",
         "stadium": "ستاد الملك عبدالله الثاني - القويسمة",
         "referee": "أحمد يعقوب",
         "broadcast": "الأردن الرياضية",
@@ -375,7 +375,7 @@
         "homeScore": 1,
         "awayScore": 1,
         "status": "finished",
-        "kickoffIso": "2026-11-18T18:15:36.301Z",
+        "kickoffIso": "2026-11-18T18:26:04.427Z",
         "stadium": "ملعب السلط",
         "broadcast": "الأردن الرياضية",
         "events": [
@@ -422,7 +422,7 @@
         "homeScore": 2,
         "awayScore": 0,
         "status": "finished",
-        "kickoffIso": "2026-11-18T02:15:36.301Z",
+        "kickoffIso": "2026-11-18T02:26:04.427Z",
         "stadium": "ملعب البترا - مدينة الحسين للشباب",
         "events": [
           {
@@ -458,7 +458,7 @@
         "awayScore": 0,
         "status": "live",
         "liveMinute": 58,
-        "kickoffIso": "2026-11-18T23:15:36.301Z",
+        "kickoffIso": "2026-11-18T23:26:04.427Z",
         "stadium": "ستاد الأمير هاشم - الرمثا",
         "featured": true,
         "events": [
@@ -518,7 +518,7 @@
         "homeScore": 3,
         "awayScore": 1,
         "status": "finished",
-        "kickoffIso": "2026-11-17T22:15:36.301Z",
+        "kickoffIso": "2026-11-17T22:26:04.427Z",
         "stadium": "ستاد الحسن - إربد",
         "events": [
           {
@@ -587,7 +587,7 @@
         "homeScore": 2,
         "awayScore": 2,
         "status": "finished",
-        "kickoffIso": "2026-11-17T18:15:36.301Z",
+        "kickoffIso": "2026-11-17T18:26:04.427Z",
         "stadium": "ستاد الأمير علي - المفرق",
         "events": [
           {
@@ -642,7 +642,7 @@
         "homeScore": 2,
         "awayScore": 1,
         "status": "finished",
-        "kickoffIso": "2026-11-18T14:15:36.301Z",
+        "kickoffIso": "2026-11-18T14:26:04.427Z",
         "stadium": "ملعب البولو - مدينة الحسين للشباب",
         "events": [
           {
@@ -697,7 +697,7 @@
         "homeScore": 3,
         "awayScore": 2,
         "status": "finished",
-        "kickoffIso": "2026-11-17T20:15:36.301Z",
+        "kickoffIso": "2026-11-17T20:26:04.427Z",
         "stadium": "ملعب البترا - مدينة الحسين للشباب",
         "events": [],
         "homeTeamId": "tm_u6zkna",
@@ -2460,7 +2460,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "first_div": {
         "competitionId": "first_div",
@@ -2483,7 +2483,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "second_div": {
         "competitionId": "second_div",
@@ -2507,7 +2507,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "third_div": {
         "competitionId": "third_div",
@@ -2532,7 +2532,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "youth_u20": {
         "competitionId": "youth_u20",
@@ -2557,7 +2557,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "youth_u17": {
         "competitionId": "youth_u17",
@@ -2582,7 +2582,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "youth_u15": {
         "competitionId": "youth_u15",
@@ -2607,7 +2607,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "youth_grassroots": {
         "competitionId": "youth_grassroots",
@@ -2631,7 +2631,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "womens_league": {
         "competitionId": "womens_league",
@@ -2654,7 +2654,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "jordan_cup": {
         "competitionId": "jordan_cup",
@@ -2681,7 +2681,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "national_teams": {
         "competitionId": "national_teams",
@@ -2704,7 +2704,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       },
       "general": {
         "competitionId": "general",
@@ -2727,7 +2727,7 @@
           "goals_for",
           "wins"
         ],
-        "updatedAt": "2026-11-19T00:15:36.304Z"
+        "updatedAt": "2026-11-19T00:26:04.430Z"
       }
     },
     "importBatches": [],
@@ -2916,7 +2916,7 @@
             "highlight": true
           }
         ],
-        "createdAt": "2026-11-18T21:15:36.301Z"
+        "createdAt": "2026-11-18T21:26:04.427Z"
       },
       {
         "id": "card-2",
@@ -2942,7 +2942,7 @@
             "value": "الأردن الرياضية"
           }
         ],
-        "createdAt": "2026-11-18T20:15:36.301Z"
+        "createdAt": "2026-11-18T20:26:04.427Z"
       },
       {
         "id": "card-3",
@@ -2968,7 +2968,7 @@
             "value": "17 هدفاً"
           }
         ],
-        "createdAt": "2026-11-18T15:15:36.301Z"
+        "createdAt": "2026-11-18T15:26:04.427Z"
       }
     ],
     "liveStreams": [
@@ -2980,7 +2980,7 @@
         "platform": "youtube",
         "competitionId": "pro_league",
         "isLive": false,
-        "createdAt": "2026-11-18T23:15:36.301Z"
+        "createdAt": "2026-11-18T23:26:04.427Z"
       }
     ],
     "notifications": [
@@ -2990,7 +2990,7 @@
         "body": "الحسين إربد يتقدم 2-1 على الفيصلي في قمة الأسبوع 14 على ستاد الحسن!",
         "type": "breaking",
         "competitionId": "pro_league",
-        "createdAt": "2026-11-18T23:51:36.301Z",
+        "createdAt": "2026-11-19T00:02:04.427Z",
         "sentViaCloud": false
       },
       {
@@ -2999,7 +2999,7 @@
         "body": "تقرير طبي يطمئن الجماهير الأردنية حول جاهزية جميع اللاعبين قبل المواجهة القادمة.",
         "type": "announcement",
         "competitionId": "national_teams",
-        "createdAt": "2026-11-18T22:15:36.301Z",
+        "createdAt": "2026-11-18T22:26:04.427Z",
         "sentViaCloud": false
       }
     ],
@@ -3090,7 +3090,14 @@
       "dailyRequestsLimit": 120,
       "dailyRequestsUsed": 0,
       "monthlySpentEstimateUsd": 0,
-      "pauseOnBudgetExceeded": true
+      "pauseOnBudgetExceeded": true,
+      "automationEnabled": true,
+      "cacheTtlMinutes": 20,
+      "maxRetryAttempts": 2,
+      "lastBudgetResetDate": "2026-11-19",
+      "lastMonthlyResetMonth": "2026-11",
+      "totalCacheHits": 0,
+      "sourceCacheHashes": {}
     },
     "customCompetitions": []
   }

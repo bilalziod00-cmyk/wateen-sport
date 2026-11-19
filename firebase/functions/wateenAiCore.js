@@ -556,6 +556,7 @@ async function rewriteAndVerifySportsNews({
 
 module.exports = {
   DEFAULT_MODELS,
+  stableHash,
   normalizeArabicForCompare,
   generateDeterministicNewsId,
   computeTitleSimilarity,

@@ -298,6 +298,26 @@ export interface WateenAutomationSettings {
   monthlySpentEstimateUsd: number;
   pauseOnBudgetExceeded: boolean;
   lastAutomationRunAt?: string;
+  automationEnabled?: boolean;
+  cacheTtlMinutes?: number;
+  maxRetryAttempts?: number;
+  lastBudgetResetDate?: string;
+  lastMonthlyResetMonth?: string;
+  lastAutomationError?: string;
+  lastFailureAlertAt?: string;
+  totalCacheHits?: number;
+  sourceCacheHashes?: Record<string, { contentHash: string; cachedAt: string }>;
+}
+
+// تنبيهات الأخطاء، فشل المصادر، وتجاوز الميزانية للمالك
+export interface AutomationAlertItem {
+  id: string;
+  severity: 'error' | 'warning' | 'info';
+  sourceId?: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  resolved?: boolean;
 }
 
 // معايير كسر التعادل القابلة للتخصيص لكل بطولة
@@ -592,6 +612,8 @@ export interface AppDataState {
   importBatches?: SmartImportBatch[];
   auditLogs?: ImportRevisionEntry[];
   automationSettings?: WateenAutomationSettings;
+  automationAlerts?: AutomationAlertItem[];
+  lastSyncSuccessAt?: string;
   banners: HeroBanner[];
   cards: SportsGraphicCard[];
   liveStreams: LiveStreamItem[];
